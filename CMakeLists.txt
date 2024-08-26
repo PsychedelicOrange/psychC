@@ -7,4 +7,16 @@ project(
 	LANGUAGES C
 	)
 
-add_executable(psychC.exe src/main.c)
+add_executable(psychspiration 
+	src/main.c
+	src/glad.c)
+
+target_include_directories(psychspiration PRIVATE src)
+
+target_link_libraries(
+	psychspiration
+	PRIVATE
+	glfw3
+	X11 # for glfw3 linux
+	m # math
+	)
