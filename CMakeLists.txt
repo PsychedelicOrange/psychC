@@ -7,9 +7,16 @@ project(
 	LANGUAGES C
 	)
 
+
 add_executable(psychspiration 
 	src/main.c
-	src/glad.c)
+	src/glad.c
+	src/constants.h
+	src/disk.c
+	src/disk.h
+	)
+
+target_compile_options(psychspiration PRIVATE -Wall )
 
 target_include_directories(psychspiration PRIVATE src)
 

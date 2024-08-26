@@ -2,9 +2,8 @@
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <stdlib.h>
-#define true 1
-#define false 0
-
+#include "disk.h"
+#include "constants.h"
 
 // -- -- -- -- -- -- Function declare -- -- -- -- -- --- --
 void crash_game(char* msg);
@@ -14,8 +13,9 @@ GLFWwindow* create_glfw_window();
 void init_glad();
 
 unsigned int compile_shader(const char* source, int shaderType);
-unsigned int compile_shader(const char* source, int shaderType);
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+unsigned int create_program(unsigned int vertexShader,unsigned int fragmentShader);
+
+void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window);
 
 // -- -- -- -- -- -- Contants -- -- -- -- -- --- --
@@ -46,6 +46,7 @@ void init_glfw(){
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
+
 }
 
 GLFWwindow* create_glfw_window(){
@@ -113,14 +114,20 @@ void crash_game(char* msg){
 int main()
 {
 
-
 	init_glfw();
 	GLFWwindow* window = create_glfw_window();
 	init_glad();
 
-	unsigned int vertexShader = compile_shader(vertexShaderSource, GL_VERTEX_SHADER);
-	unsigned int fragmentShader = compile_shader(fragmentShaderSource, GL_FRAGMENT_SHADER);
-	unsigned int shaderProgram = create_program(vertexShader,fragmentShader);
+	unsigned int shaderProgram;
+	{
+		char vertexShaderCode[FILE_SIZE_SHADER_MAX];
+		char fragmentShaderCode[FILE_SIZE_SHADER_MAX];
+		read_string_from_disk("/home/parth/code/psychC/shaders/vertex.vs",vertexShaderCode);
+		read_string_from_disk("/home/parth/code/psychC/shaders/fragment.fs",fragmentShaderCode);
+		unsigned int vertexShader = compile_shader(vertexShaderCode, GL_VERTEX_SHADER);
+		unsigned int fragmentShader = compile_shader(fragmentShaderSource, GL_FRAGMENT_SHADER);
+		shaderProgram = create_program(vertexShader,fragmentShader);
+	}
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -215,7 +222,7 @@ void processInput(GLFWwindow *window)
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
     // make sure the viewport matches the new window dimensions; note that width and 
     // height will be significantly larger than specified on retina displays.
