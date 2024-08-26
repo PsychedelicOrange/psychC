@@ -6,3 +6,4 @@
 - audio rendering (openal)
 - multiplayer ( client/server, peer to peer)
 - physics system ( bullet )
+- in-engine ui and editor (compared to blender shenanigans)
