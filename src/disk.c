@@ -10,5 +10,5 @@ void read_string_from_disk(const char* path, char* data){
 	{
 		printf("Could'nt read file: %s",path);
 	}
-	close(file);
+	fclose(file);
 }

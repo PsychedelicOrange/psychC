@@ -2,9 +2,27 @@
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include "disk.h"
 #include "constants.h"
-
+#define CGLTF_IMPLEMENTATION
+#include "cgltf.h"
+// -- -- -- -- -- -- Structs -- -- -- -- -- -- -- -- -- --
+struct vertice_pnt {
+	float position[3];
+	float normal[3];
+	float texcoord[2];
+};
+struct vertice_pn {
+	float position[3];
+	float normal[3];
+};
+struct vertice_pntt {
+	float position[3];
+	float normal[3];
+	float texcoord[2];
+	float texcoord1[2];
+};
 // -- -- -- -- -- -- Function declare -- -- -- -- -- --- --
 void crash_game(char* msg);
 
@@ -23,18 +41,6 @@ void processInput(GLFWwindow *window);
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
-const char *vertexShaderSource = "#version 460 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "void main()\n"
-    "{\n"
-    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
-const char *fragmentShaderSource = "#version 460 core\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-    "}\n\0";
 
 // -- -- -- -- -- -- GLFW Functions -- -- -- -- -- --- --
 void init_glfw(){
@@ -50,7 +56,7 @@ void init_glfw(){
 }
 
 GLFWwindow* create_glfw_window(){
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "psychspiration", NULL, NULL);
     if (window == NULL)
     {
 		crash_game("Unable to create glfw window");
@@ -111,6 +117,54 @@ void crash_game(char* msg){
 	exit(1);
 }
 
+// -- -- -- -- -- -- Cgltf parse helper functions -- -- -- -- - -
+int cgltf_to_gl_type_indices[5] = {GL_INVALID_VALUE,GL_INVALID_VALUE,GL_INVALID_VALUE,GL_INVALID_VALUE,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT};
+typedef enum attribute_combo{
+	attribute_combo_pn,
+	attribute_combo_pnt,
+	attribute_combo_pntt,
+	attribute_combo_invalid
+}attribute_combo;
+
+attribute_combo get_attributes_present(cgltf_primitive p){
+	int count = p.attributes_count;
+	int pc=0,nc=0,tc=0,tanc=0;
+	for(int i = 0;i < count;i++){
+		switch(p.attributes[i].type){
+			case cgltf_attribute_type_position:
+				printf("\nposition attribute found");
+				pc++;
+				break;
+			case cgltf_attribute_type_normal:
+				printf("\nnormal attribute found");
+				nc++;
+				break;
+			case cgltf_attribute_type_texcoord:
+				printf("\ntexcoors attribute found");
+				tc++;
+				break;
+			case cgltf_attribute_type_tangent:
+				tanc++;
+				break;
+			default:
+				pc++;
+				printf("\n^Found some wacky attribute: %s",p.attributes[i].name);
+				break;
+		}
+	}
+	if(pc && nc){
+		switch (tc){
+			case 0:
+				return attribute_combo_pn;
+			case 1:
+				return attribute_combo_pnt;
+			case 2:
+				return attribute_combo_pntt;
+			}
+	}
+	return attribute_combo_invalid;
+}
+
 int main()
 {
 
@@ -125,49 +179,236 @@ int main()
 		read_string_from_disk("/home/parth/code/psychC/shaders/vertex.vs",vertexShaderCode);
 		read_string_from_disk("/home/parth/code/psychC/shaders/fragment.fs",fragmentShaderCode);
 		unsigned int vertexShader = compile_shader(vertexShaderCode, GL_VERTEX_SHADER);
-		unsigned int fragmentShader = compile_shader(fragmentShaderSource, GL_FRAGMENT_SHADER);
+		unsigned int fragmentShader = compile_shader(fragmentShaderCode, GL_FRAGMENT_SHADER);
 		shaderProgram = create_program(vertexShader,fragmentShader);
 	}
 
-    // set up vertex data (and buffer(s)) and configure vertex attributes
-    // ------------------------------------------------------------------
-    float vertices[] = {
-         0.5f,  0.5f, 0.0f,  // top right
-         0.5f, -0.5f, 0.0f,  // bottom right
-        -0.5f, -0.5f, 0.0f,  // bottom left
-        -0.5f,  0.5f, 0.0f   // top left 
-    };
-    unsigned int indices[] = {  // note that we start from 0!
-        0, 1, 3,  // first Triangle
-        1, 2, 3   // second Triangle
-    };
 
-    unsigned int VBO, VAO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+	// load mesh with it's primitives.
+	unsigned int vao[MAX_PRIMITIVE_COUNT_PER_MESH];
+	unsigned int ebo[MAX_PRIMITIVE_COUNT_PER_MESH];
+	unsigned int vbo[MAX_PRIMITIVE_COUNT_PER_MESH];
+	unsigned int indices_size[MAX_PRIMITIVE_COUNT_PER_MESH];
+	int indice_type[MAX_PRIMITIVE_COUNT_PER_MESH];
 
-    // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
-    glBindVertexArray(VAO);
+	const char* model_path = "models/DamagedHelmet.gltf";
+	{
+		cgltf_options options = {0};
+		cgltf_data* data = NULL;
+		cgltf_result result = cgltf_parse_file(&options,model_path, &data);
+		if (result == cgltf_result_success)
+			result = cgltf_load_buffers(&options, data, model_path);
+		{
+			// let's pick first mesh for now
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+			int primitive_count = data->meshes[0].primitives_count; 
+			glGenVertexArrays(primitive_count, vao);
+			glGenBuffers(primitive_count, vbo);
+			glGenBuffers(primitive_count, ebo);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+			for ( int i = 0; i < primitive_count; i++)
+			{
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+				cgltf_primitive p = data->meshes[0].primitives[i];
 
-    // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
-    glBindBuffer(GL_ARRAY_BUFFER, 0); 
+				// load indices
+				cgltf_buffer_view* buf_view = p.indices->buffer_view;
+				indices_size[0] = p.indices->count;
+				indice_type[0] = cgltf_to_gl_type_indices[p.indices->component_type];
 
-    // remember: do NOT unbind the EBO while a VAO is active as the bound element buffer object IS stored in the VAO; keep the EBO bound.
-    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+				printf("\nIndices: %li, type: %i",indices_size,p.indices->component_type);
 
-    // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
-    // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
-    glBindVertexArray(0); 
+				glBindVertexArray(vao[i]); 
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[i]);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, buf_view->size ,buf_view->buffer->data + buf_view->offset,GL_STATIC_DRAW);
+
+				// load attributes
+				attribute_combo combo_type = get_attributes_present(p);
+				float* pos_buf = NULL, *norm_buf = NULL;
+				float* texcoord_buf[2] = {NULL,NULL};
+				size_t pos_size,norm_size;
+				size_t texcoord_size[2];
+				int attribute_count = p.attributes_count;
+
+				int texcoord_index = 0;
+				for( int j =0 ; j< attribute_count;j++){
+					void* att_buf;
+					size_t att_size;
+					cgltf_accessor *accessor = p.attributes[j].data;
+					cgltf_buffer_view* buf_view = accessor->buffer_view;
+					printf("\nAttribute %s of type %i stored in offset: %li, count:%li, stride: %li",accessor->name, accessor->component_type, accessor->offset, accessor->count, accessor->stride);
+					if( accessor->component_type == cgltf_component_type_r_32f){
+						att_buf = buf_view->buffer->data + buf_view->offset;
+						att_size = buf_view->size;
+					}else{
+						crash_game("\nEncountered non-float vertex data");
+					}
+					switch (p.attributes[j].type) {
+						case cgltf_attribute_type_position:
+							pos_buf = att_buf;
+							pos_size = att_size;
+							break;
+						case cgltf_attribute_type_normal:
+							norm_buf = att_buf;
+							norm_size = att_size;
+							break;
+						case cgltf_attribute_type_texcoord:
+							texcoord_buf[texcoord_index] = att_buf;
+							texcoord_size[texcoord_index++] = att_size;
+							break;
+						default:
+							printf("\n^Found some wacky attribute: %s",p.attributes[j].name);
+							break;
+					}
+				}
+				
+				void* bdata = NULL;
+				size_t bsize;
+				switch(combo_type){
+					case attribute_combo_pn:
+						{
+							assert(pos_size == norm_size);
+							int vertice_count = pos_size/(sizeof(float)*3);
+							bsize = sizeof(struct vertice_pn)*(vertice_count);
+							struct vertice_pn* vertex = malloc(bsize);
+							bdata = vertex;
+							for(int i = 0; i < vertice_count; i++){
+								vertex[i].position[0] = *(pos_buf + (3 * i));
+								vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
+								vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
+
+								vertex[i].normal[0] = *(norm_buf + (3 * i));
+								vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
+								vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
+							}
+						}
+							break;
+					case attribute_combo_pnt:
+						{
+							assert(pos_size == norm_size);
+							assert(pos_size/3 == texcoord_size[0]/2);
+
+							int vertice_count = pos_size/(sizeof(float)*3);
+							bsize = sizeof(struct vertice_pnt)*vertice_count;
+							struct vertice_pnt* vertex = malloc(bsize);
+							if(vertex == NULL) crash_game("couldn't malloc");
+
+							bdata = vertex;
+							for(int i = 0; i < vertice_count; i++){
+								vertex[i].position[0] = *(pos_buf + (3 * i));
+								vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
+								vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
+
+								vertex[i].normal[0] = *(norm_buf + (3 * i));
+								vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
+								vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
+
+								vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
+								vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
+							}
+
+						}
+						break;
+					case attribute_combo_pntt:
+						{
+							assert(pos_size == norm_size);
+							int vertice_count = pos_size/(sizeof(float)*3);
+							bsize = sizeof(struct vertice_pntt)*(pos_size/3);
+							struct vertice_pntt* vertex = malloc(bsize);
+							bdata = vertex;
+							for(int i = 0; i < vertice_count; i++){
+								vertex[i].position[0] = *(pos_buf + (3 * i));
+								vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
+								vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
+
+								vertex[i].normal[0] = *(norm_buf + (3 * i));
+								vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
+								vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
+
+								vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
+								vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
+
+								vertex[i].texcoord1[0] = *(texcoord_buf[1] + (2 * i));
+								vertex[i].texcoord1[1] = *(texcoord_buf[1] + (2 * i) + 1);
+							}
+						}
+						break;
+					case attribute_combo_invalid:
+						crash_game("Attribute/s missing");
+						break;
+				}
+
+				glBindBuffer(GL_ARRAY_BUFFER,vbo[i]);
+				glBufferData(GL_ARRAY_BUFFER, bsize,bdata,GL_STATIC_DRAW);
+				free(bdata);
+
+				switch(combo_type){
+					case attribute_combo_pn:
+							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)0);
+							glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)(sizeof(float)*3));
+							break;
+					case attribute_combo_pnt:
+							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pnt), (void*)0);
+							glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pnt), (void*)(sizeof(float)*3));
+							glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pnt), (void*)(sizeof(float)*6));
+							break;
+					case attribute_combo_pntt:
+							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)0);
+							glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)(sizeof(float)*3));
+							glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)(sizeof(float)*6));
+							glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)(sizeof(float)*8));
+							break;
+
+				}
+
+
+				glEnableVertexAttribArray(0);
+				glBindBuffer(GL_ARRAY_BUFFER, 0); 
+				glBindVertexArray(0); 
+
+				}
+
+			}
+				printf("\n omg is it failing on  cgltf_free ????");
+				fflush(stdout);
+		cgltf_free(data);
+				printf("\n it was not.");
+				fflush(stdout);
+	}
+				printf("\n Then where ????");
+				fflush(stdout);
+
+
+//  // set up vertex data (and buffer(s)) and configure vertex attributes
+//  // ------------------------------------------------------------------
+//  float vertices[] = {
+//       0.5f,  0.5f, 0.0f,  // top right
+//       0.5f, -0.5f, 0.0f,  // bottom right
+//      -0.5f, -0.5f, 0.0f,  // bottom left
+//      -0.5f,  0.5f, 0.0f   // top left 
+//  };
+//  unsigned int indices[] = {  // note that we start from 0!
+//      0, 1, 3,  // first Triangle
+//      1, 2, 3   // second Triangle
+//  };
+
+//  unsigned int VBO, VAO, EBO;
+//  glGenVertexArrays(1, &VAO);
+//  glGenBuffers(1, &VBO);
+//  glGenBuffers(1, &EBO);
+
+//  glBindVertexArray(VAO);
+
+//  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+//  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+//  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+//  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+//  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+//  glEnableVertexAttribArray(0);
+//  glBindBuffer(GL_ARRAY_BUFFER, 0); 
+//  glBindVertexArray(0); 
 
 
     // uncomment this call to draw in wireframe polygons.
@@ -180,7 +421,6 @@ int main()
         // input
         // -----
         processInput(window);
-
         // render
         // ------
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -188,9 +428,8 @@ int main()
 
         // draw our first triangle
         glUseProgram(shaderProgram);
-        glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-        //glDrawArrays(GL_TRIANGLES, 0, 6);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(vao[0]); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
+        glDrawElements(GL_TRIANGLES, indices_size[0], indice_type[0], 0);
         // glBindVertexArray(0); // no need to unbind it every time 
  
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -201,14 +440,15 @@ int main()
 
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
+    glDeleteVertexArrays(1, &vao[0]);
+    glDeleteBuffers(1, &vbo[0]);
+    glDeleteBuffers(1, &ebo[0]);
     glDeleteProgram(shaderProgram);
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
+	printf("\nbye!\n");
     return 0;
 }
 
