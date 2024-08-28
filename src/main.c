@@ -7,22 +7,19 @@
 #include "constants.h"
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
+// --- -- -- - -- - - DeFines move them to constants lateer -- -- -- - -- 
+#define MAX_MESHES_PER_FILE 100
+#define MAX_PRIMITIVES_PER_FILE 100
 // -- -- -- -- -- -- Structs -- -- -- -- -- -- -- -- -- --
-struct vertice_pnt {
-	float position[3];
-	float normal[3];
-	float texcoord[2];
+
+struct primitive {
+	unsigned int vao;
+	unsigned int ebo;
+	unsigned int vbo;
+	unsigned int indices_count;
+	int gl_index_type;
 };
-struct vertice_pn {
-	float position[3];
-	float normal[3];
-};
-struct vertice_pntt {
-	float position[3];
-	float normal[3];
-	float texcoord[2];
-	float texcoord1[2];
-};
+
 // -- -- -- -- -- -- Function declare -- -- -- -- -- --- --
 void crash_game(char* msg);
 
@@ -113,57 +110,27 @@ unsigned int create_program(unsigned int vertexShader, unsigned int fragmentShad
 
 // -- -- -- -- -- -- Engine Helpers Functions -- -- -- -- -- --- --
 void crash_game(char* msg){
-	printf("Game crashed: %s",msg);
+	printf("\nGame crashed: %s\n",msg);
+	fflush(stdout);
 	exit(1);
 }
 
 // -- -- -- -- -- -- Cgltf parse helper functions -- -- -- -- - -
-int cgltf_to_gl_type_indices[5] = {GL_INVALID_VALUE,GL_INVALID_VALUE,GL_INVALID_VALUE,GL_INVALID_VALUE,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT};
-typedef enum attribute_combo{
-	attribute_combo_pn,
-	attribute_combo_pnt,
-	attribute_combo_pntt,
-	attribute_combo_invalid
-}attribute_combo;
+//
+int cgltf_ctype_to_gl_type[7] = {GL_INVALID_VALUE,GL_BYTE,GL_UNSIGNED_BYTE,GL_SHORT,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT,GL_FLOAT};
+int cgltf_ctype_to_bytes[7] = {-1,1,1,2,2,4,4};
+typedef enum attribute{
+	position,
+	normal,
+	tangent,
+	texcoords,
+	texcoords1,
+	color,
+	joints,
+	weights,
+	attributes_size
+}attribute;
 
-attribute_combo get_attributes_present(cgltf_primitive p){
-	int count = p.attributes_count;
-	int pc=0,nc=0,tc=0,tanc=0;
-	for(int i = 0;i < count;i++){
-		switch(p.attributes[i].type){
-			case cgltf_attribute_type_position:
-				printf("\nposition attribute found");
-				pc++;
-				break;
-			case cgltf_attribute_type_normal:
-				printf("\nnormal attribute found");
-				nc++;
-				break;
-			case cgltf_attribute_type_texcoord:
-				printf("\ntexcoors attribute found");
-				tc++;
-				break;
-			case cgltf_attribute_type_tangent:
-				tanc++;
-				break;
-			default:
-				pc++;
-				printf("\n^Found some wacky attribute: %s",p.attributes[i].name);
-				break;
-		}
-	}
-	if(pc && nc){
-		switch (tc){
-			case 0:
-				return attribute_combo_pn;
-			case 1:
-				return attribute_combo_pnt;
-			case 2:
-				return attribute_combo_pntt;
-			}
-	}
-	return attribute_combo_invalid;
-}
 
 int main()
 {
@@ -184,165 +151,224 @@ int main()
 	}
 
 
-	// load mesh with it's primitives.
-	unsigned int vao[MAX_PRIMITIVE_COUNT_PER_MESH];
-	unsigned int ebo[MAX_PRIMITIVE_COUNT_PER_MESH];
-	unsigned int vbo[MAX_PRIMITIVE_COUNT_PER_MESH];
-	unsigned int indices_size[MAX_PRIMITIVE_COUNT_PER_MESH];
-	int indice_type[MAX_PRIMITIVE_COUNT_PER_MESH];
-
-	const char* model_path = "models/DamagedHelmet.gltf";
+	// load all meshes and their primitves in this gltf file 
+	int mesh_count;	
+	int mesh_offset[MAX_MESHES_PER_FILE];
+	int primitives_count = 0;	
+	struct primitive primitives[MAX_PRIMITIVES_PER_FILE];
+	const char* model_path = "models/xbot_cap.gltf";
 	{
 		cgltf_options options = {0};
 		cgltf_data* data = NULL;
 		cgltf_result result = cgltf_parse_file(&options,model_path, &data);
 		if (result == cgltf_result_success)
-			result = cgltf_load_buffers(&options, data, model_path);
 		{
-			// let's pick first mesh for now
+			result = cgltf_load_buffers(&options, data, model_path);
+			if (result != cgltf_result_success){
+				printf("cgltf couldn't load buffers : %i",result);
+				crash_game("could'nt load model");
+			}
+			mesh_count = data->meshes_count;
+			assert(mesh_count < MAX_MESHES_PER_FILE);
 
-			int primitive_count = data->meshes[0].primitives_count; 
-			glGenVertexArrays(primitive_count, vao);
-			glGenBuffers(primitive_count, vbo);
-			glGenBuffers(primitive_count, ebo);
+			for(int j =0 ; j < mesh_count; j++){
+				int primitive_count = data->meshes[j].primitives_count; 
+				assert(primitive_count < MAX_PRIMITIVES_PER_FILE);
+				primitives_count += primitive_count;
+				int pi = 0;
+				for(int i = 0; i < primitive_count;i++){
+					struct primitive p_primitive;
+					glGenVertexArrays(1, &p_primitive.vao);
+					glGenBuffers(1, &p_primitive.vbo);
+					glGenBuffers(1, &p_primitive.ebo);
 
-			for ( int i = 0; i < primitive_count; i++)
-			{
+					cgltf_primitive p = data->meshes[j].primitives[i];
 
-				cgltf_primitive p = data->meshes[0].primitives[i];
-
-				// load indices
-				cgltf_buffer_view* buf_view = p.indices->buffer_view;
-				indices_size[0] = p.indices->count;
-				indice_type[0] = cgltf_to_gl_type_indices[p.indices->component_type];
-
-				printf("\nIndices: %li, type: %i",indices_size,p.indices->component_type);
-
-				glBindVertexArray(vao[i]); 
-				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[i]);
-				glBufferData(GL_ELEMENT_ARRAY_BUFFER, buf_view->size ,buf_view->buffer->data + buf_view->offset,GL_STATIC_DRAW);
-
-				// load attributes
-				attribute_combo combo_type = get_attributes_present(p);
-				float* pos_buf = NULL, *norm_buf = NULL;
-				float* texcoord_buf[2] = {NULL,NULL};
-				size_t pos_size,norm_size;
-				size_t texcoord_size[2];
-				int attribute_count = p.attributes_count;
-
-				int texcoord_index = 0;
-				for( int j =0 ; j< attribute_count;j++){
-					void* att_buf;
-					size_t att_size;
-					cgltf_accessor *accessor = p.attributes[j].data;
-					cgltf_buffer_view* buf_view = accessor->buffer_view;
-					printf("\nAttribute %s of type %i stored in offset: %li, count:%li, stride: %li",accessor->name, accessor->component_type, accessor->offset, accessor->count, accessor->stride);
-					if( accessor->component_type == cgltf_component_type_r_32f){
-						att_buf = buf_view->buffer->data + buf_view->offset;
-						att_size = buf_view->size;
+					// load indices into the ebo and call it a day
+					if(p.indices  != NULL){
+						cgltf_buffer_view* buf_view = p.indices->buffer_view;
+						p_primitive.indices_count = p.indices->count;
+						p_primitive.gl_index_type = cgltf_ctype_to_gl_type[p.indices->component_type];
+						glBindVertexArray(p_primitive.vao); 
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, p_primitive.ebo);
+						glBufferData(GL_ELEMENT_ARRAY_BUFFER, buf_view->size ,buf_view->buffer->data + buf_view->offset,GL_STATIC_DRAW);
 					}else{
-						crash_game("\nEncountered non-float vertex data");
+						crash_game("encountered un-indexed mesh data. eww.");
 					}
-					switch (p.attributes[j].type) {
-						case cgltf_attribute_type_position:
-							pos_buf = att_buf;
-							pos_size = att_size;
-							break;
-						case cgltf_attribute_type_normal:
-							norm_buf = att_buf;
-							norm_size = att_size;
-							break;
-						case cgltf_attribute_type_texcoord:
-							texcoord_buf[texcoord_index] = att_buf;
-							texcoord_size[texcoord_index++] = att_size;
-							break;
-						default:
+
+
+					// find attributes
+
+					void* attribute_buf[attributes_size] = {NULL};
+					size_t attribute_size[attributes_size];
+					cgltf_component_type attribute_ctype[attributes_size];
+					int attribute_stride[attributes_size];
+					int attribute_count = p.attributes_count;
+					int texcoord_index = 0;
+					int color_type = -1;
+					size_t stride = 0;
+					printf("\nNo. of attributes found : %i",attribute_count);
+					for( int j =0 ; j< attribute_count;j++){
+						cgltf_accessor *accessor = p.attributes[j].data;
+						cgltf_buffer_view* buf_view = accessor->buffer_view;
+						cgltf_component_type ctype = accessor->component_type;
+						printf("\nAttribute %s of type %i stored in offset: %li, count:%li, stride: %li",p.attributes[j].name, accessor->component_type, accessor->offset, accessor->count, accessor->stride);
+						fflush(stdout);
+						assert(ctype == 2 || ctype ==4 || ctype == 6);
+						stride += accessor->stride;
+						void* att_buf = buf_view->buffer->data + buf_view->offset;
+						size_t att_size = buf_view->size;
+						cgltf_attribute_type type = p.attributes[j].type;
+						if(type == cgltf_attribute_type_color){
+							color_type = accessor->type;
+						}
+						if(type == cgltf_attribute_type_texcoord){
+							attribute_buf[type-1+texcoord_index] = att_buf;
+							attribute_size[type-1+texcoord_index] = att_size;
+							attribute_ctype[type-1+texcoord_index] = ctype;
+							attribute_stride[type-1+texcoord_index] = accessor->stride;
+							texcoord_index++;
+						}else if(type < cgltf_attribute_type_custom){
+							attribute_buf[type-1] = att_buf;
+							attribute_size[type-1] = att_size;
+							attribute_ctype[type-1] = ctype;
+							attribute_stride[type-1] = accessor->stride;
+						}else{
 							printf("\n^Found some wacky attribute: %s",p.attributes[j].name);
+						}
+					}
+
+					// interleave attributes into a buffer
+
+					int vertice_count = attribute_size[position]/(sizeof(float)*3);
+					printf("\nVertice_count: %i",vertice_count);
+					size_t bsize = vertice_count * stride;
+					void* bdata = malloc(bsize);
+					{
+						void* ptr = bdata;
+						for(int i =0; i< vertice_count; i++){
+							for(int k =0; k < attributes_size; k++){
+								if(attribute_buf[k] != NULL){
+									memcpy(ptr,attribute_buf[k],attribute_stride[k]);
+									ptr = (void*)((char*)ptr + attribute_stride[k]);
+									attribute_buf[k] = (void*)((char*)attribute_buf[k] + attribute_stride[k]);
+								}
+							}
+						}
+					}
+
+					glBindBuffer(GL_ARRAY_BUFFER,p_primitive.vbo);
+					glBufferData(GL_ARRAY_BUFFER, bsize,bdata,GL_STATIC_DRAW);
+					free(bdata);
+
+					size_t cstride = 0; 
+					for(int k =0; k < attributes_size; k++){
+						if(attribute_buf[k] != NULL){
+							printf("\nglVertexAttribPointer(%i,%i,%i,GL_FALSE,%i,(void*)(%i)",k, attribute_stride[k]/cgltf_ctype_to_bytes[attribute_ctype[k]], cgltf_ctype_to_gl_type[attribute_ctype[k]],stride,cstride); 
+							fflush(stdout);
+							glVertexAttribPointer(k, attribute_stride[k]/cgltf_ctype_to_bytes[attribute_ctype[k]], cgltf_ctype_to_gl_type[attribute_ctype[k]], GL_FALSE, stride, (void*)(cstride));
+							cstride += attribute_stride[k];
+						}
+					}
+
+/*
+					switch(combo_type){
+						case attribute_combo_pt:
+							{
+								int vertice_count = pos_size/(sizeof(float)*3);
+								bsize = sizeof(struct vertice_pt)*(vertice_count);
+								struct vertice_pt* vertex = malloc(bsize);
+								bdata = vertex;
+								for(int i = 0; i < vertice_count; i++){
+									vertex[i].position[0] = *(pos_buf + (3 * i));
+									vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
+									vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
+
+									vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
+									vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
+								}
+							}
+							break;
+						case attribute_combo_pn:
+							{
+								assert(pos_size == norm_size);
+								int vertice_count = pos_size/(sizeof(float)*3);
+								bsize = sizeof(struct vertice_pn)*(vertice_count);
+								struct vertice_pn* vertex = malloc(bsize);
+								bdata = vertex;
+								for(int i = 0; i < vertice_count; i++){
+									vertex[i].position[0] = *(pos_buf + (3 * i));
+									vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
+									vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
+
+									vertex[i].normal[0] = *(norm_buf + (3 * i));
+									vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
+									vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
+								}
+							}
+							break;
+						case attribute_combo_pnt:
+							{
+								assert(pos_size == norm_size);
+
+								int vertice_count = pos_size/(sizeof(float)*3);
+								bsize = sizeof(struct vertice_pnt)*vertice_count;
+								struct vertice_pnt* vertex = malloc(bsize);
+								if(vertex == NULL) crash_game("couldn't malloc");
+
+								bdata = vertex;
+								for(int i = 0; i < vertice_count; i++){
+									vertex[i].position[0] = *(pos_buf + (3 * i));
+									vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
+									vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
+
+									vertex[i].normal[0] = *(norm_buf + (3 * i));
+									vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
+									vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
+
+									vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
+									vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
+								}
+
+							}
+							break;
+						case attribute_combo_pntt:
+							{
+								assert(pos_size == norm_size);
+								int vertice_count = pos_size/(sizeof(float)*3);
+								bsize = sizeof(struct vertice_pntt)*(pos_size/3);
+								struct vertice_pntt* vertex = malloc(bsize);
+								bdata = vertex;
+								for(int i = 0; i < vertice_count; i++){
+									vertex[i].position[0] = *(pos_buf + (3 * i));
+									vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
+									vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
+
+									vertex[i].normal[0] = *(norm_buf + (3 * i));
+									vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
+									vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
+
+									vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
+									vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
+
+									vertex[i].texcoord1[0] = *(texcoord_buf[1] + (2 * i));
+									vertex[i].texcoord1[1] = *(texcoord_buf[1] + (2 * i) + 1);
+								}
+							}
+							break;
+						case attribute_combo_invalid:
+							crash_game("Attribute/s missing");
 							break;
 					}
-				}
-				
-				void* bdata = NULL;
-				size_t bsize;
-				switch(combo_type){
-					case attribute_combo_pn:
-						{
-							assert(pos_size == norm_size);
-							int vertice_count = pos_size/(sizeof(float)*3);
-							bsize = sizeof(struct vertice_pn)*(vertice_count);
-							struct vertice_pn* vertex = malloc(bsize);
-							bdata = vertex;
-							for(int i = 0; i < vertice_count; i++){
-								vertex[i].position[0] = *(pos_buf + (3 * i));
-								vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
-								vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
+				*/
 
-								vertex[i].normal[0] = *(norm_buf + (3 * i));
-								vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
-								vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
-							}
-						}
+
+					/*
+					switch(combo_type){
+						case attribute_combo_pt:
+							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)0);
+							glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)(sizeof(float)*3));
 							break;
-					case attribute_combo_pnt:
-						{
-							assert(pos_size == norm_size);
-							assert(pos_size/3 == texcoord_size[0]/2);
-
-							int vertice_count = pos_size/(sizeof(float)*3);
-							bsize = sizeof(struct vertice_pnt)*vertice_count;
-							struct vertice_pnt* vertex = malloc(bsize);
-							if(vertex == NULL) crash_game("couldn't malloc");
-
-							bdata = vertex;
-							for(int i = 0; i < vertice_count; i++){
-								vertex[i].position[0] = *(pos_buf + (3 * i));
-								vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
-								vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
-
-								vertex[i].normal[0] = *(norm_buf + (3 * i));
-								vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
-								vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
-
-								vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
-								vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
-							}
-
-						}
-						break;
-					case attribute_combo_pntt:
-						{
-							assert(pos_size == norm_size);
-							int vertice_count = pos_size/(sizeof(float)*3);
-							bsize = sizeof(struct vertice_pntt)*(pos_size/3);
-							struct vertice_pntt* vertex = malloc(bsize);
-							bdata = vertex;
-							for(int i = 0; i < vertice_count; i++){
-								vertex[i].position[0] = *(pos_buf + (3 * i));
-								vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
-								vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
-
-								vertex[i].normal[0] = *(norm_buf + (3 * i));
-								vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
-								vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
-
-								vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
-								vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
-
-								vertex[i].texcoord1[0] = *(texcoord_buf[1] + (2 * i));
-								vertex[i].texcoord1[1] = *(texcoord_buf[1] + (2 * i) + 1);
-							}
-						}
-						break;
-					case attribute_combo_invalid:
-						crash_game("Attribute/s missing");
-						break;
-				}
-
-				glBindBuffer(GL_ARRAY_BUFFER,vbo[i]);
-				glBufferData(GL_ARRAY_BUFFER, bsize,bdata,GL_STATIC_DRAW);
-				free(bdata);
-
-				switch(combo_type){
 					case attribute_combo_pn:
 							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)0);
 							glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)(sizeof(float)*3));
@@ -358,25 +384,21 @@ int main()
 							glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)(sizeof(float)*6));
 							glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)(sizeof(float)*8));
 							break;
-
-				}
-
-
+					*/
 				glEnableVertexAttribArray(0);
 				glBindBuffer(GL_ARRAY_BUFFER, 0); 
 				glBindVertexArray(0); 
-
+				primitives[pi++] =  p_primitive;
+				}
+				mesh_offset[j] = pi;
 				}
 
 			}
-				printf("\n omg is it failing on  cgltf_free ????");
-				fflush(stdout);
+		else{
+			crash_game("Please check if model exists!");
+		}
 		cgltf_free(data);
-				printf("\n it was not.");
-				fflush(stdout);
 	}
-				printf("\n Then where ????");
-				fflush(stdout);
 
 
 //  // set up vertex data (and buffer(s)) and configure vertex attributes
@@ -412,7 +434,7 @@ int main()
 
 
     // uncomment this call to draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // render loop
     // -----------
@@ -428,8 +450,11 @@ int main()
 
         // draw our first triangle
         glUseProgram(shaderProgram);
-        glBindVertexArray(vao[0]); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-        glDrawElements(GL_TRIANGLES, indices_size[0], indice_type[0], 0);
+		for(int i=0;i<primitives_count;i++){
+			glBindVertexArray(primitives[i].vao); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
+			glDrawElements(GL_TRIANGLES, primitives[i].indices_count, primitives[i].gl_index_type, 0);
+			//glDrawElements(GL_TRIANGLES, primitives[i].indices_count, GL_UNSIGNED_SHORT, 0);
+		}
         // glBindVertexArray(0); // no need to unbind it every time 
  
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -440,9 +465,9 @@ int main()
 
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
-    glDeleteVertexArrays(1, &vao[0]);
-    glDeleteBuffers(1, &vbo[0]);
-    glDeleteBuffers(1, &ebo[0]);
+    //glDeleteVertexArrays(1, &vao[0]);
+    //glDeleteBuffers(1, &vbo[0]);
+    //glDeleteBuffers(1, &ebo[0]);
     glDeleteProgram(shaderProgram);
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
