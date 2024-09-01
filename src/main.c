@@ -1,26 +1,28 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <cglm/cglm.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include "disk.h"
 #include "constants.h"
+#include "mesh.h"
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
-// --- -- -- - -- - - DeFines move them to constants lateer -- -- -- - -- 
+// --- -- -- - -- - - Defines move them to constants lateer -- -- -- - -- 
 #define MAX_MESHES_PER_FILE 100
 #define MAX_PRIMITIVES_PER_FILE 100
-// -- -- -- -- -- -- Structs -- -- -- -- -- -- -- -- -- --
+#define MAX_BONES_PER_MESH 100
+#define MAX_PRIMITIVES_PER_MESH 100
+#define VBOS_ENV 3
 
-struct primitive {
-	unsigned int vao;
-	unsigned int ebo;
-	unsigned int vbo;
-	unsigned int indices_count;
-	int gl_index_type;
-};
 
 // -- -- -- -- -- -- Function declare -- -- -- -- -- --- --
+
+
+struct mesh load_mesh(cgltf_mesh* cmesh);
+struct primitive load_primitive(cgltf_primitive p);
+
 void crash_game(char* msg);
 
 void init_glfw();
@@ -38,6 +40,17 @@ void processInput(GLFWwindow *window);
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+// -- -- -- -- -- -- Structs -- -- -- -- -- --- --
+
+typedef struct buffer{
+	void*  data;
+	size_t size;
+}buffer;
+
+typedef struct drawable_mesh{
+	unsigned int vao;
+	size_t indices_count;
+}drawable_mesh;
 
 // -- -- -- -- -- -- GLFW Functions -- -- -- -- -- --- --
 void init_glfw(){
@@ -119,19 +132,245 @@ void crash_game(char* msg){
 //
 int cgltf_ctype_to_gl_type[7] = {GL_INVALID_VALUE,GL_BYTE,GL_UNSIGNED_BYTE,GL_SHORT,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT,GL_FLOAT};
 int cgltf_ctype_to_bytes[7] = {-1,1,1,2,2,4,4};
+
 typedef enum attribute{
 	position,
 	normal,
 	tangent,
-	texcoords,
-	texcoords1,
+	texcoord,
+	texcoord1,
 	color,
 	joints,
 	weights,
 	attributes_size
 }attribute;
 
+enum attribute cgltf_attribute_type_to_native(cgltf_attribute_type t,int texcoord_index){
+	switch(t){
+		case cgltf_attribute_type_position:
+			return position;
+			break;
+		case cgltf_attribute_type_normal:
+			return normal;
+			break;
+		case cgltf_attribute_type_tangent:
+			return tangent;
+			break;
+		case cgltf_attribute_type_texcoord:
+			return texcoord + texcoord_index;
+			break;
+		case cgltf_attribute_type_color:
+			return color;
+			break;
+		case cgltf_attribute_type_joints:
+			return joints;
+			break;
+		case cgltf_attribute_type_weights:
+			return weights;
+			break;
+		default:
+			break;
+	}
+	return -1;
+}
 
+
+void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t primitive_index){
+	size_t mpriv_count = mesh->primitives_count;
+	for(size_t i = 0; i < mpriv_count;i++){
+		primitive_env p;
+		size_t attribute_count = mesh->primitives[i].attributes_count;
+		cgltf_attribute* attributes = mesh->primitives[i].attributes;
+		p.vertices = malloc(sizeof(vertex_env)*attributes[0].data->count);
+		p.vertex_count = attributes[0].data->count;
+		int ti=0;
+
+		// load indices 
+		if(mesh->primitives[i].indices != NULL){
+			cgltf_accessor* indices = mesh->primitives[0].indices;
+			assert(indices->component_type == cgltf_component_type_r_16u);
+			cgltf_buffer_view* buf_view = indices->buffer_view;
+			printf("\n INDICES:");
+			printf("\n\t indices.ctype:\t %i",indices->component_type);
+			printf("\n\t indices.type:\t %i",indices->type);
+			printf("\n\t indices.offset:\t%li",indices->offset);
+			printf("\n\t indices.count:\t%li",indices->count);
+			printf("\n\t indices.stride:\t%li",indices->stride);
+			printf("\n\t\t buffer.name:\t%s",buf_view->buffer->name);
+			printf("\n\t\t buffer_view.offset:\t%li",buf_view->offset);
+			printf("\n\t\t buffer_view.size:\t%li",buf_view->size);
+			p.indices_count = indices->count;
+			p.indices = malloc(sizeof(unsigned short)*p.indices_count);
+			memcpy(p.indices,buf_view->buffer->data + buf_view->offset + indices->offset,buf_view->size);
+		}else{
+			crash_game("encountered un-indexed mesh data. eww.");
+		}
+		
+
+		for(size_t j =0; j < attribute_count;j++){
+
+			cgltf_accessor *accessor = attributes[j].data;
+			cgltf_buffer_view* buf_view = accessor->buffer_view;
+
+			printf("\n Attribute %s",attributes[j].name);
+			printf("\n\t Accessor.ctype:\t %i",accessor->component_type);
+			printf("\n\t Accessor.type:\t %i",accessor->type);
+			printf("\n\t Accessor.offset:\t%li",accessor->offset);
+			printf("\n\t Accessor.count:\t%li",accessor->count);
+			printf("\n\t Accessor.stride:\t%li",accessor->stride);
+			printf("\n\t\t buffer.name:\t%s",buf_view->buffer->name);
+			printf("\n\t\t buffer_view.offset:\t%li",buf_view->offset);
+			printf("\n\t\t buffer_view.size:\t%li",buf_view->size);
+			fflush(stdout);
+
+			void* att_buf = buf_view->buffer->data + buf_view->offset + accessor->offset;
+			size_t att_size = buf_view->size;
+
+			switch(attributes[j].type){
+				case cgltf_attribute_type_position:
+					assert(accessor->component_type == cgltf_component_type_r_32f);
+					assert(accessor->type == 3);
+					printf("\n Attribute loading : %s",attributes[j].name);
+					for(size_t k = 0; k < p.vertex_count; k++){
+						memcpy(p.vertices[k].position,att_buf,sizeof(float)*3);
+						att_buf = (void*) ((char*)att_buf + accessor->stride);
+					}
+					break;
+				case cgltf_attribute_type_normal:
+					assert(accessor->component_type == cgltf_component_type_r_32f);
+					assert(accessor->type == 3);
+					printf("\n Attribute loading : %s",attributes[j].name);
+					for(size_t k = 0; k < p.vertex_count; k++){
+						memcpy(p.vertices[k].normal,att_buf,sizeof(float)*3);
+						att_buf = (void*) ((char*)att_buf + accessor->stride);
+					}
+					break;
+				case cgltf_attribute_type_tangent:
+					assert(accessor->component_type == cgltf_component_type_r_32f);
+					assert(accessor->type == 4);
+					printf("\n Attribute loading : %s",attributes[j].name);
+					for(size_t k = 0; k < p.vertex_count; k++){
+						memcpy(p.vertices[k].tangent,att_buf,sizeof(float)*4);
+						att_buf = (void*) ((char*)att_buf + accessor->stride);
+					}
+					break;
+				case cgltf_attribute_type_texcoord:
+					assert(accessor->component_type == cgltf_component_type_r_32f);
+					assert(accessor->type == 2);
+					printf("\n Attribute loading : %s",attributes[j].name);
+					if(ti++){
+						for(size_t k = 0; k < p.vertex_count; k++){
+							memcpy(p.vertices[k].uv,att_buf,sizeof(float)*2);
+							att_buf = (void*) ((char*)att_buf + accessor->stride);
+						}
+					}else{
+						for(size_t k = 0; k < p.vertex_count; k++){
+							memcpy(p.vertices[k].uv1,att_buf,sizeof(float)*2);
+							att_buf = (void*) ((char*)att_buf + accessor->stride);
+						}
+					}
+					break;
+				default:
+					printf("Environment mesh doesn't support : %s",attributes[j].name);
+			}
+			fflush(stdout);	
+		}
+
+		primitives[primitive_index++] = p;
+	}
+}
+ size_t load_model_env(char* model_path, primitive_env* primitives){
+		cgltf_options options = {0};
+		cgltf_data* data = NULL;
+		cgltf_result result = cgltf_parse_file(&options,model_path, &data);
+		size_t primitive_count = 0;
+		if (result == cgltf_result_success)
+		{
+			result = cgltf_load_buffers(&options, data, model_path);
+			if (result != cgltf_result_success){
+				printf("cgltf couldn't load buffers : %i",result);
+				crash_game("could'nt load model");
+			}
+			size_t meshes_count = data->meshes_count;
+			cgltf_mesh* meshes = data->meshes;
+			for(int i=0; i< meshes_count; i++){
+				load_primitives_env(meshes,primitives,primitive_count);
+				primitive_count += meshes->primitives_count;
+			}
+
+		}else{
+			crash_game("Please check if model exists!");
+		}
+		cgltf_free(data);
+		return primitive_count;
+ }
+buffer append_primitive_vertice_data(primitive_env* primitives,size_t from,size_t to){
+	printf("lol %zu to %zu",from,to);
+	vertex_env* vertices;
+	size_t vertice_count =0;
+	for(int i = from; i < to; i++){
+		vertice_count += primitives[i].vertex_count;
+	}
+	vertices = malloc(sizeof(vertex_env)*vertice_count);
+	vertex_env* ptr = vertices;
+	for(int i = from; i < to; i++){
+		memcpy(ptr,primitives[i].vertices,primitives[i].vertex_count*sizeof(vertex_env));
+		ptr += primitives[i].vertex_count;
+	}
+	buffer buf = {vertices,vertice_count*sizeof(vertex_env)};
+	return buf;
+}
+
+buffer append_primitive_indice_data(primitive_env* primitives,size_t from,size_t to){
+	printf("lol %zu to %zu",from,to);
+	unsigned short* indices;
+	size_t indices_count = 0;
+	for(int i = from; i < to; i++){
+		indices_count += primitives[i].indices_count;
+	}
+	indices = malloc(sizeof(unsigned short)*indices_count);
+	unsigned short* ptr = indices;
+	for(int i = from; i < to; i++){
+		memcpy(ptr,primitives[i].indices,primitives[i].indices_count*sizeof(unsigned short));
+		ptr += primitives[i].indices_count;
+	}
+	buffer buf = {indices,indices_count*sizeof(unsigned short)};
+	return buf;
+}
+
+drawable_mesh load_single_primitive_env(primitive_env p){
+	// load model primitive into buffers and return ids
+	unsigned int ebo,vbo;
+	drawable_mesh m = {0};
+	m.indices_count = p.indices_count;
+	glGenVertexArrays(1,&m.vao);
+	glGenBuffers(1, &vbo);
+	glGenBuffers(1, &ebo);
+
+	glBindVertexArray(m.vao); 
+	glBindBuffer(GL_ARRAY_BUFFER,vbo);
+	glBufferData(GL_ARRAY_BUFFER, p.vertex_count*sizeof(vertex_env),p.vertices,GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, p.indices_count*sizeof(unsigned short),p.indices,GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(0));
+	glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,normal)));
+	glVertexAttribPointer(2,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
+	glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv)));
+	glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
+
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0); 
+	glBindVertexArray(0); 
+	return m;
+}
+
+void draw_single_primitive_env(unsigned int shaderProgram,drawable_mesh d){
+	glUseProgram(shaderProgram);
+	glBindVertexArray(d.vao);
+	glDrawElements(GL_TRIANGLES, d.indices_count,GL_UNSIGNED_SHORT, 0);
+}
 int main()
 {
 
@@ -150,291 +389,71 @@ int main()
 		shaderProgram = create_program(vertexShader,fragmentShader);
 	}
 
+	// load primitives for env model into memory
+	primitive_env primitives[MAX_PRIMITIVES_PER_FILE];
+	size_t primitive_count = load_model_env("models/DamagedHelmet.gltf",primitives);
+	
+	printf("\nPrimitives count %li",primitive_count);
 
-	// load all meshes and their primitves in this gltf file 
-	int mesh_count;	
-	int mesh_offset[MAX_MESHES_PER_FILE];
-	int primitives_count = 0;	
-	struct primitive primitives[MAX_PRIMITIVES_PER_FILE];
-	const char* model_path = "models/xbot_cap.gltf";
+	// load models into ogl buffer
+
+	// divide all primitives for env models into batches of vbos
+	unsigned int vbos_env[VBOS_ENV];
+	unsigned int vaos_env[VBOS_ENV];
+	unsigned int ebos_env[VBOS_ENV];
+	size_t indice_count[VBOS_ENV] = {0};
+	size_t batch_range[VBOS_ENV] = {0};
+	size_t batch_rangei = 0;
 	{
-		cgltf_options options = {0};
-		cgltf_data* data = NULL;
-		cgltf_result result = cgltf_parse_file(&options,model_path, &data);
-		if (result == cgltf_result_success)
-		{
-			result = cgltf_load_buffers(&options, data, model_path);
-			if (result != cgltf_result_success){
-				printf("cgltf couldn't load buffers : %i",result);
-				crash_game("could'nt load model");
+		size_t batch_size = 1000000; // 1cr vertices
+		size_t cb = 0;
+
+		int i = 0;
+		while(i < primitive_count){
+			size_t cvc = 0;
+			for(;i < primitive_count; i++){
+				cvc += primitives[i].vertex_count;
+				if(cvc > batch_size)
+					break;
+				indice_count[i] += primitives[i].indices_count;
 			}
-			mesh_count = data->meshes_count;
-			assert(mesh_count < MAX_MESHES_PER_FILE);
-
-			for(int j =0 ; j < mesh_count; j++){
-				int primitive_count = data->meshes[j].primitives_count; 
-				assert(primitive_count < MAX_PRIMITIVES_PER_FILE);
-				primitives_count += primitive_count;
-				int pi = 0;
-				for(int i = 0; i < primitive_count;i++){
-					struct primitive p_primitive;
-					glGenVertexArrays(1, &p_primitive.vao);
-					glGenBuffers(1, &p_primitive.vbo);
-					glGenBuffers(1, &p_primitive.ebo);
-
-					cgltf_primitive p = data->meshes[j].primitives[i];
-
-					// load indices into the ebo and call it a day
-					if(p.indices  != NULL){
-						cgltf_buffer_view* buf_view = p.indices->buffer_view;
-						p_primitive.indices_count = p.indices->count;
-						p_primitive.gl_index_type = cgltf_ctype_to_gl_type[p.indices->component_type];
-						glBindVertexArray(p_primitive.vao); 
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, p_primitive.ebo);
-						glBufferData(GL_ELEMENT_ARRAY_BUFFER, buf_view->size ,buf_view->buffer->data + buf_view->offset,GL_STATIC_DRAW);
-					}else{
-						crash_game("encountered un-indexed mesh data. eww.");
-					}
-
-
-					// find attributes
-
-					void* attribute_buf[attributes_size] = {NULL};
-					size_t attribute_size[attributes_size];
-					cgltf_component_type attribute_ctype[attributes_size];
-					int attribute_stride[attributes_size];
-					int attribute_count = p.attributes_count;
-					int texcoord_index = 0;
-					int color_type = -1;
-					size_t stride = 0;
-					printf("\nNo. of attributes found : %i",attribute_count);
-					for( int j =0 ; j< attribute_count;j++){
-						cgltf_accessor *accessor = p.attributes[j].data;
-						cgltf_buffer_view* buf_view = accessor->buffer_view;
-						cgltf_component_type ctype = accessor->component_type;
-						printf("\nAttribute %s of type %i stored in offset: %li, count:%li, stride: %li",p.attributes[j].name, accessor->component_type, accessor->offset, accessor->count, accessor->stride);
-						fflush(stdout);
-						assert(ctype == 2 || ctype ==4 || ctype == 6);
-						stride += accessor->stride;
-						void* att_buf = buf_view->buffer->data + buf_view->offset;
-						size_t att_size = buf_view->size;
-						cgltf_attribute_type type = p.attributes[j].type;
-						if(type == cgltf_attribute_type_color){
-							color_type = accessor->type;
-						}
-						if(type == cgltf_attribute_type_texcoord){
-							attribute_buf[type-1+texcoord_index] = att_buf;
-							attribute_size[type-1+texcoord_index] = att_size;
-							attribute_ctype[type-1+texcoord_index] = ctype;
-							attribute_stride[type-1+texcoord_index] = accessor->stride;
-							texcoord_index++;
-						}else if(type < cgltf_attribute_type_custom){
-							attribute_buf[type-1] = att_buf;
-							attribute_size[type-1] = att_size;
-							attribute_ctype[type-1] = ctype;
-							attribute_stride[type-1] = accessor->stride;
-						}else{
-							printf("\n^Found some wacky attribute: %s",p.attributes[j].name);
-						}
-					}
-
-					// interleave attributes into a buffer
-
-					int vertice_count = attribute_size[position]/(sizeof(float)*3);
-					printf("\nVertice_count: %i",vertice_count);
-					size_t bsize = vertice_count * stride;
-					void* bdata = malloc(bsize);
-					{
-						void* ptr = bdata;
-						for(int i =0; i< vertice_count; i++){
-							for(int k =0; k < attributes_size; k++){
-								if(attribute_buf[k] != NULL){
-									memcpy(ptr,attribute_buf[k],attribute_stride[k]);
-									ptr = (void*)((char*)ptr + attribute_stride[k]);
-									attribute_buf[k] = (void*)((char*)attribute_buf[k] + attribute_stride[k]);
-								}
-							}
-						}
-					}
-
-					glBindBuffer(GL_ARRAY_BUFFER,p_primitive.vbo);
-					glBufferData(GL_ARRAY_BUFFER, bsize,bdata,GL_STATIC_DRAW);
-					free(bdata);
-
-					size_t cstride = 0; 
-					for(int k =0; k < attributes_size; k++){
-						if(attribute_buf[k] != NULL){
-							printf("\nglVertexAttribPointer(%i,%i,%i,GL_FALSE,%i,(void*)(%i)",k, attribute_stride[k]/cgltf_ctype_to_bytes[attribute_ctype[k]], cgltf_ctype_to_gl_type[attribute_ctype[k]],stride,cstride); 
-							fflush(stdout);
-							glVertexAttribPointer(k, attribute_stride[k]/cgltf_ctype_to_bytes[attribute_ctype[k]], cgltf_ctype_to_gl_type[attribute_ctype[k]], GL_FALSE, stride, (void*)(cstride));
-							cstride += attribute_stride[k];
-						}
-					}
-
-/*
-					switch(combo_type){
-						case attribute_combo_pt:
-							{
-								int vertice_count = pos_size/(sizeof(float)*3);
-								bsize = sizeof(struct vertice_pt)*(vertice_count);
-								struct vertice_pt* vertex = malloc(bsize);
-								bdata = vertex;
-								for(int i = 0; i < vertice_count; i++){
-									vertex[i].position[0] = *(pos_buf + (3 * i));
-									vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
-									vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
-
-									vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
-									vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
-								}
-							}
-							break;
-						case attribute_combo_pn:
-							{
-								assert(pos_size == norm_size);
-								int vertice_count = pos_size/(sizeof(float)*3);
-								bsize = sizeof(struct vertice_pn)*(vertice_count);
-								struct vertice_pn* vertex = malloc(bsize);
-								bdata = vertex;
-								for(int i = 0; i < vertice_count; i++){
-									vertex[i].position[0] = *(pos_buf + (3 * i));
-									vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
-									vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
-
-									vertex[i].normal[0] = *(norm_buf + (3 * i));
-									vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
-									vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
-								}
-							}
-							break;
-						case attribute_combo_pnt:
-							{
-								assert(pos_size == norm_size);
-
-								int vertice_count = pos_size/(sizeof(float)*3);
-								bsize = sizeof(struct vertice_pnt)*vertice_count;
-								struct vertice_pnt* vertex = malloc(bsize);
-								if(vertex == NULL) crash_game("couldn't malloc");
-
-								bdata = vertex;
-								for(int i = 0; i < vertice_count; i++){
-									vertex[i].position[0] = *(pos_buf + (3 * i));
-									vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
-									vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
-
-									vertex[i].normal[0] = *(norm_buf + (3 * i));
-									vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
-									vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
-
-									vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
-									vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
-								}
-
-							}
-							break;
-						case attribute_combo_pntt:
-							{
-								assert(pos_size == norm_size);
-								int vertice_count = pos_size/(sizeof(float)*3);
-								bsize = sizeof(struct vertice_pntt)*(pos_size/3);
-								struct vertice_pntt* vertex = malloc(bsize);
-								bdata = vertex;
-								for(int i = 0; i < vertice_count; i++){
-									vertex[i].position[0] = *(pos_buf + (3 * i));
-									vertex[i].position[1] = *(pos_buf + (3 * i) + 1);
-									vertex[i].position[2] = *(pos_buf + (3 * i) + 2);
-
-									vertex[i].normal[0] = *(norm_buf + (3 * i));
-									vertex[i].normal[1] = *(norm_buf + (3 * i) + 1);
-									vertex[i].normal[2] = *(norm_buf + (3 * i) + 2);
-
-									vertex[i].texcoord[0] = *(texcoord_buf[0] + (2 * i));
-									vertex[i].texcoord[1] = *(texcoord_buf[0] + (2 * i) + 1);
-
-									vertex[i].texcoord1[0] = *(texcoord_buf[1] + (2 * i));
-									vertex[i].texcoord1[1] = *(texcoord_buf[1] + (2 * i) + 1);
-								}
-							}
-							break;
-						case attribute_combo_invalid:
-							crash_game("Attribute/s missing");
-							break;
-					}
-				*/
-
-
-					/*
-					switch(combo_type){
-						case attribute_combo_pt:
-							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)0);
-							glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)(sizeof(float)*3));
-							break;
-					case attribute_combo_pn:
-							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)0);
-							glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pn), (void*)(sizeof(float)*3));
-							break;
-					case attribute_combo_pnt:
-							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pnt), (void*)0);
-							glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pnt), (void*)(sizeof(float)*3));
-							glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pnt), (void*)(sizeof(float)*6));
-							break;
-					case attribute_combo_pntt:
-							glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)0);
-							glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)(sizeof(float)*3));
-							glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)(sizeof(float)*6));
-							glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertice_pntt), (void*)(sizeof(float)*8));
-							break;
-					*/
-				glEnableVertexAttribArray(0);
-				glBindBuffer(GL_ARRAY_BUFFER, 0); 
-				glBindVertexArray(0); 
-				primitives[pi++] =  p_primitive;
-				}
-				mesh_offset[j] = pi;
-				}
-
-			}
-		else{
-			crash_game("Please check if model exists!");
+			batch_range[++batch_rangei] = i;
 		}
-		cgltf_free(data);
+
 	}
+	// generate buffers, arrange env data and load the batches into vbos 
+	//
+	glGenVertexArrays(batch_rangei,vaos_env);
+	glGenBuffers(batch_rangei, vbos_env);
+	glGenBuffers(batch_rangei, ebos_env);
+	for(size_t i  = 0; i< batch_rangei; i++){
 
+		glBindVertexArray(vaos_env[i]); 
+		buffer vertices = append_primitive_vertice_data(primitives,batch_range[i],batch_range[i+1]);
+		glBindBuffer(GL_ARRAY_BUFFER,vbos_env[i]);
+		glBufferData(GL_ARRAY_BUFFER, vertices.size,vertices.data,GL_STATIC_DRAW);
+		free(vertices.data);
+		
+		buffer indices = append_primitive_indice_data(primitives,batch_range[i],batch_range[i+1]);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebos_env[i]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size,indices.data,GL_STATIC_DRAW);
+		free(indices.data);
 
-//  // set up vertex data (and buffer(s)) and configure vertex attributes
-//  // ------------------------------------------------------------------
-//  float vertices[] = {
-//       0.5f,  0.5f, 0.0f,  // top right
-//       0.5f, -0.5f, 0.0f,  // bottom right
-//      -0.5f, -0.5f, 0.0f,  // bottom left
-//      -0.5f,  0.5f, 0.0f   // top left 
-//  };
-//  unsigned int indices[] = {  // note that we start from 0!
-//      0, 1, 3,  // first Triangle
-//      1, 2, 3   // second Triangle
-//  };
+		glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(0));
+		glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,normal)));
+		glVertexAttribPointer(2,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
+		glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv)));
+		glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
 
-//  unsigned int VBO, VAO, EBO;
-//  glGenVertexArrays(1, &VAO);
-//  glGenBuffers(1, &VBO);
-//  glGenBuffers(1, &EBO);
+		glEnableVertexAttribArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0); 
+		glBindVertexArray(0); 
 
-//  glBindVertexArray(VAO);
-
-//  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-//  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-//  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-//  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-//  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-//  glEnableVertexAttribArray(0);
-//  glBindBuffer(GL_ARRAY_BUFFER, 0); 
-//  glBindVertexArray(0); 
-
+	}
 
     // uncomment this call to draw in wireframe polygons.
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
 
     // render loop
     // -----------
@@ -448,13 +467,12 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // draw our first triangle
-        glUseProgram(shaderProgram);
-		for(int i=0;i<primitives_count;i++){
-			glBindVertexArray(primitives[i].vao); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-			glDrawElements(GL_TRIANGLES, primitives[i].indices_count, primitives[i].gl_index_type, 0);
-			//glDrawElements(GL_TRIANGLES, primitives[i].indices_count, GL_UNSIGNED_SHORT, 0);
+// draw envs
+		for(size_t i  = 0; i< batch_rangei; i++){
+			glBindVertexArray(vaos_env[i]);
+			glDrawElements(GL_TRIANGLES, indice_count[i],GL_UNSIGNED_SHORT, 0);
 		}
+	
         // glBindVertexArray(0); // no need to unbind it every time 
  
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)

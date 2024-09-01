@@ -4,7 +4,7 @@ project(
 	psychspiration
 	VERSION 1.0
 	DESCRIPTION "game engine"
-	LANGUAGES C
+	LANGUAGES CXX C
 	)
 
 
@@ -20,10 +20,12 @@ target_compile_options(psychspiration PRIVATE -Wall )
 
 target_include_directories(psychspiration PRIVATE src)
 
+find_package(glm CONFIG REQUIRED)
 target_link_libraries(
 	psychspiration
 	PRIVATE
 	glfw3
 	X11 # for glfw3 linux
 	m # math
+	cglm
 	)
