@@ -133,48 +133,6 @@ void crash_game(char* msg){
 int cgltf_ctype_to_gl_type[7] = {GL_INVALID_VALUE,GL_BYTE,GL_UNSIGNED_BYTE,GL_SHORT,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT,GL_FLOAT};
 int cgltf_ctype_to_bytes[7] = {-1,1,1,2,2,4,4};
 
-typedef enum attribute{
-	position,
-	normal,
-	tangent,
-	texcoord,
-	texcoord1,
-	color,
-	joints,
-	weights,
-	attributes_size
-}attribute;
-
-enum attribute cgltf_attribute_type_to_native(cgltf_attribute_type t,int texcoord_index){
-	switch(t){
-		case cgltf_attribute_type_position:
-			return position;
-			break;
-		case cgltf_attribute_type_normal:
-			return normal;
-			break;
-		case cgltf_attribute_type_tangent:
-			return tangent;
-			break;
-		case cgltf_attribute_type_texcoord:
-			return texcoord + texcoord_index;
-			break;
-		case cgltf_attribute_type_color:
-			return color;
-			break;
-		case cgltf_attribute_type_joints:
-			return joints;
-			break;
-		case cgltf_attribute_type_weights:
-			return weights;
-			break;
-		default:
-			break;
-	}
-	return -1;
-}
-
-
 void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t primitive_index){
 	size_t mpriv_count = mesh->primitives_count;
 	for(size_t i = 0; i < mpriv_count;i++){
@@ -275,7 +233,10 @@ void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t pr
 			}
 			fflush(stdout);	
 		}
-
+		for(int i = 0; i < p.vertex_count;i++){
+			float* n = p.vertices[i].normal;
+			printf("\nNORMALS: %f,%f,%f",n[0],n[1],n[2]);
+		}
 		primitives[primitive_index++] = p;
 	}
 }
@@ -304,6 +265,7 @@ void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t pr
 		cgltf_free(data);
 		return primitive_count;
  }
+
 buffer append_primitive_vertice_data(primitive_env* primitives,size_t from,size_t to){
 	printf("lol %zu to %zu",from,to);
 	vertex_env* vertices;
@@ -353,11 +315,15 @@ drawable_mesh load_single_primitive_env(primitive_env p){
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, p.indices_count*sizeof(unsigned short),p.indices,GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(0));
+	glEnableVertexAttribArray(0);	
+	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,position)));
+	glEnableVertexAttribArray(1);	
 	glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,normal)));
-	glVertexAttribPointer(2,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
+	glEnableVertexAttribArray(2);	
+	glVertexAttribPointer(2,4,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
+	glEnableVertexAttribArray(3);	
 	glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv)));
+	glEnableVertexAttribArray(4);	
 	glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
 
 	glEnableVertexAttribArray(0);
@@ -371,6 +337,7 @@ void draw_single_primitive_env(unsigned int shaderProgram,drawable_mesh d){
 	glBindVertexArray(d.vao);
 	glDrawElements(GL_TRIANGLES, d.indices_count,GL_UNSIGNED_SHORT, 0);
 }
+
 int main()
 {
 
@@ -391,12 +358,12 @@ int main()
 
 	// load primitives for env model into memory
 	primitive_env primitives[MAX_PRIMITIVES_PER_FILE];
-	size_t primitive_count = load_model_env("models/DamagedHelmet.gltf",primitives);
+	size_t primitive_count = load_model_env("models/cube.gltf",primitives);
 	
 	printf("\nPrimitives count %li",primitive_count);
 
 	// load models into ogl buffer
-
+	drawable_mesh mesh =load_single_primitive_env(primitives[0]);
 	// divide all primitives for env models into batches of vbos
 	unsigned int vbos_env[VBOS_ENV];
 	unsigned int vaos_env[VBOS_ENV];
@@ -439,10 +406,15 @@ int main()
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size,indices.data,GL_STATIC_DRAW);
 		free(indices.data);
 
-		glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(0));
+		glEnableVertexAttribArray(0);	
+		glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,position)));
+		glEnableVertexAttribArray(1);	
 		glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,normal)));
-		glVertexAttribPointer(2,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
+		glEnableVertexAttribArray(2);	
+		glVertexAttribPointer(2,4,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
+		glEnableVertexAttribArray(3);	
 		glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv)));
+		glEnableVertexAttribArray(4);	
 		glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
 
 		glEnableVertexAttribArray(0);
@@ -453,7 +425,6 @@ int main()
 
     // uncomment this call to draw in wireframe polygons.
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
 
     // render loop
     // -----------
@@ -467,11 +438,17 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-// draw envs
+		// draw envs
+
+		draw_single_primitive_env(shaderProgram,mesh);
+
+		/*
+		glUseProgram(shaderProgram);
 		for(size_t i  = 0; i< batch_rangei; i++){
 			glBindVertexArray(vaos_env[i]);
 			glDrawElements(GL_TRIANGLES, indice_count[i],GL_UNSIGNED_SHORT, 0);
 		}
+		*/
 	
         // glBindVertexArray(0); // no need to unbind it every time 
  
