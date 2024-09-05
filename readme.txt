@@ -7,3 +7,7 @@
 - multiplayer ( client/server, peer to peer)
 - physics system ( bullet )
 - in-engine ui and editor (compared to blender shenanigans)
+
+
+* not implemented yet
+- morph targets (could be done later)
