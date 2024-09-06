@@ -46,10 +46,12 @@ typedef struct buffer{
 	size_t size;
 }buffer;
 
+// in out structs aka convinience structs :)
 typedef struct drawable_mesh{
 	unsigned int vao;
 	size_t indices_count;
 }drawable_mesh;
+
 
 // -- -- -- -- -- -- GLFW Functions -- -- -- -- -- --- --
 void init_glfw(){
@@ -83,8 +85,8 @@ void init_glad(){
     }
 	const GLubyte* vendor = glGetString(GL_VENDOR); // Returns the vendor
 	const GLubyte* renderer = glGetString(GL_RENDERER); // Returns a hint to the model
-	printf("Vendor: %s",vendor);
-	printf("Renderer: %s",renderer);
+	printf("\nVendor: %s",vendor);
+	printf("\nRenderer: %s",renderer);
 }
 // -- -- -- -- -- -- Shader functions -- -- -- -- -- --- --
 //
@@ -166,7 +168,6 @@ void load_primitives_actor (cgltf_mesh* mesh, primitive_actor* primitives, size_
 		cgltf_attribute* attributes = mesh->primitives[i].attributes;
 		p.vertices = malloc(sizeof(vertex_env)*attributes[0].data->count);
 		p.vertex_count = attributes[0].data->count;
-		int ti=0;
 
 		// load indices 
 		if(mesh->primitives[i].indices != NULL){
@@ -377,6 +378,8 @@ size_t load_model_env(char* model_path, primitive_env* primitives, size_t primit
 	return primitive_index;
  }
 
+// ---- - -- -- -- ---- -- -- -- upload ogl  helper functions -- -- -- -- -- -- -- 
+
 buffer append_primitive_vertice_data(primitive_env* primitives,size_t from,size_t to){
 	vertex_env* vertices;
 	size_t vertice_count =0;
@@ -412,7 +415,32 @@ buffer append_primitive_indice_data(primitive_env* primitives,size_t from,size_t
 	buffer buf = {indices,indices_count*sizeof(unsigned short)};
 	return buf;
 }
-
+void vertexAttrib_env(){
+	glEnableVertexAttribArray(0);	
+	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,position)));
+	glEnableVertexAttribArray(1);	
+	glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,normal)));
+	glEnableVertexAttribArray(2);	
+	glVertexAttribPointer(2,4,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
+	glEnableVertexAttribArray(3);	
+	glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv)));
+	glEnableVertexAttribArray(4);	
+	glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
+}
+void vertexAttrib_actor(){
+	glEnableVertexAttribArray(0);	
+	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,position)));
+	glEnableVertexAttribArray(1);	
+	glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,normal)));
+	glEnableVertexAttribArray(2);	
+	glVertexAttribPointer(2,4,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,tangent)));
+	glEnableVertexAttribArray(3);	
+	glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,uv)));
+	glEnableVertexAttribArray(4);	
+	glVertexAttribPointer(4,4,GL_UNSIGNED_SHORT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,joints)));
+	glEnableVertexAttribArray(5);	
+	glVertexAttribPointer(4,4,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,weights)));
+}
 drawable_mesh upload_single_primitive_env(primitive_env p){
 	// upload single primtive into ogl buffer
 	// load model primitive into buffers and return ids
@@ -429,17 +457,7 @@ drawable_mesh upload_single_primitive_env(primitive_env p){
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, p.indices_count*sizeof(unsigned short),p.indices,GL_STATIC_DRAW);
-	glEnableVertexAttribArray(0);	
-	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,position)));
-	glEnableVertexAttribArray(1);	
-	glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,normal)));
-	glEnableVertexAttribArray(2);	
-	glVertexAttribPointer(2,4,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
-	glEnableVertexAttribArray(3);	
-	glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv)));
-	glEnableVertexAttribArray(4);	
-	glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
-
+	vertexAttrib_env();
 	glEnableVertexAttribArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0); 
 	glBindVertexArray(0); 
@@ -450,6 +468,44 @@ void draw_single_primitive_env(unsigned int shaderProgram,drawable_mesh d){
 	glUseProgram(shaderProgram);
 	glBindVertexArray(d.vao);
 	glDrawElements(GL_TRIANGLES, d.indices_count,GL_UNSIGNED_SHORT, 0);
+}
+void draw_multiple_primitive_env(unsigned int shaderProgram,unsigned int env_vao,primitive_env* primitives, size_t primitive_count){
+	glUseProgram(shaderProgram);
+	glBindVertexArray(env_vao);
+	for(int i = 0; i < primitive_count;i++){
+		//printf("\nglDrawElementsBaseVertex(GL_TRIANGLES, %li, GL_UNSIGNED_SHORT,(void*) %li, %li)",primitives[i].indices_count, (primitives[i].index_index), primitives[i].base_vertex);
+		glDrawElementsBaseVertex(GL_TRIANGLES, primitives[i].indices_count, GL_UNSIGNED_SHORT, (void*)(primitives[i].index_index * 2), primitives[i].base_vertex);
+	}
+}
+unsigned int upload_multiple_primitive_env(primitive_env* primitives, size_t primitive_count){
+	// smash env mesh into a single buffer, 
+	unsigned int vbos_env;
+	unsigned int vaos_env;
+	unsigned int ebos_env;
+	// generate buffers, arrange env data and load the batches into vbos 
+	//
+	glGenVertexArrays(1,&vaos_env);
+	glGenBuffers(1, &vbos_env);
+	glGenBuffers(1, &ebos_env);
+
+	glBindVertexArray(vaos_env); 
+	buffer vertices = append_primitive_vertice_data(primitives,0,primitive_count);
+	printf("Size of vertices buffer: %li",vertices.size);
+	glBindBuffer(GL_ARRAY_BUFFER,vbos_env);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size,vertices.data,GL_STATIC_DRAW);
+	free(vertices.data);
+
+	buffer indices = append_primitive_indice_data(primitives,0,primitive_count);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebos_env);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size,indices.data,GL_STATIC_DRAW);
+	free(indices.data);
+
+	vertexAttrib_env();
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0); 
+	glBindVertexArray(0); 
+
+	return vaos_env;
 }
 
 int main()
@@ -473,51 +529,13 @@ int main()
 	// load primitives for env model into memory
 	primitive_env primitives_env[MAX_PRIMITIVES];
 	size_t primitive_count = load_model_env("/mnt/Windows/Data/Models/sponza/sponza_bckup.gltf",primitives_env,0);
-	printf("\nPrimitives count %li",primitive_count);
+	printf("\nPrimitives_env count %li",primitive_count);
 
 	//drawable_mesh mesh = upload_single_primitive_env(primitives_env[0]);
-
-	// smash env mesh into a single buffer, 
-	unsigned int vbos_env;
-	unsigned int vaos_env;
-	unsigned int ebos_env;
-	{
-		// generate buffers, arrange env data and load the batches into vbos 
-		//
-		glGenVertexArrays(1,&vaos_env);
-		glGenBuffers(1, &vbos_env);
-		glGenBuffers(1, &ebos_env);
-
-		glBindVertexArray(vaos_env); 
-		buffer vertices = append_primitive_vertice_data(primitives_env,0,primitive_count);
-		printf("Size of vertices buffer: %li",vertices.size);
-		glBindBuffer(GL_ARRAY_BUFFER,vbos_env);
-		glBufferData(GL_ARRAY_BUFFER, vertices.size,vertices.data,GL_STATIC_DRAW);
-		free(vertices.data);
-
-		buffer indices = append_primitive_indice_data(primitives_env,0,primitive_count);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebos_env);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size,indices.data,GL_STATIC_DRAW);
-		free(indices.data);
-
-		glEnableVertexAttribArray(0);	
-		glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,position)));
-		glEnableVertexAttribArray(1);	
-		glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,normal)));
-		glEnableVertexAttribArray(2);	
-		glVertexAttribPointer(2,4,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
-		glEnableVertexAttribArray(3);	
-		glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv)));
-		glEnableVertexAttribArray(4);	
-		glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
-
-		glBindBuffer(GL_ARRAY_BUFFER, 0); 
-		glBindVertexArray(0); 
-
-	}
+	unsigned int env_vao =  upload_multiple_primitive_env(primitives_env,primitive_count);
 
     // uncomment this call to draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // render loop
     // -----------
@@ -534,13 +552,7 @@ int main()
 		// draw envs
 
 		//draw_single_primitive_env(shaderProgram,mesh);
-
-		glUseProgram(shaderProgram);
-		glBindVertexArray(vaos_env);
-		for(int i = 0; i < primitive_count;i++){
-			printf("\nglDrawElementsBaseVertex(GL_TRIANGLES, %li, GL_UNSIGNED_SHORT,(void*) %li, %li)",primitives_env[i].indices_count, (primitives_env[i].index_index), primitives_env[i].base_vertex);
-			glDrawElementsBaseVertex(GL_TRIANGLES, primitives_env[i].indices_count, GL_UNSIGNED_SHORT, (void*)(primitives_env[i].index_index * 2), primitives_env[i].base_vertex);
-		}
+		draw_multiple_primitive_env(shaderProgram,env_vao, primitives_env,primitive_count);
 	
         // glBindVertexArray(0); // no need to unbind it every time 
  
