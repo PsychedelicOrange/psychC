@@ -427,6 +427,7 @@ void vertexAttrib_env(){
 	glEnableVertexAttribArray(4);	
 	glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
 }
+
 void vertexAttrib_actor(){
 	glEnableVertexAttribArray(0);	
 	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,position)));
@@ -440,6 +441,29 @@ void vertexAttrib_actor(){
 	glVertexAttribPointer(4,4,GL_UNSIGNED_SHORT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,joints)));
 	glEnableVertexAttribArray(5);	
 	glVertexAttribPointer(4,4,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,weights)));
+}
+
+drawable_mesh upload_single_primitive_actor(primitive_actor p){
+	// upload single primtive into ogl buffer
+	// load model primitive into buffers and return ids
+	unsigned int ebo,vbo;
+	drawable_mesh m = {0};
+	m.indices_count = p.indices_count;
+	glGenVertexArrays(1,&m.vao);
+	glGenBuffers(1, &vbo);
+	glGenBuffers(1, &ebo);
+
+	glBindVertexArray(m.vao); 
+	glBindBuffer(GL_ARRAY_BUFFER,vbo);
+	glBufferData(GL_ARRAY_BUFFER, p.vertex_count*sizeof(vertex_actor),p.vertices,GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, p.indices_count*sizeof(unsigned short),p.indices,GL_STATIC_DRAW);
+	vertexAttrib_actor();
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0); 
+	glBindVertexArray(0); 
+	return m;
 }
 drawable_mesh upload_single_primitive_env(primitive_env p){
 	// upload single primtive into ogl buffer
@@ -469,6 +493,7 @@ void draw_single_primitive_env(unsigned int shaderProgram,drawable_mesh d){
 	glBindVertexArray(d.vao);
 	glDrawElements(GL_TRIANGLES, d.indices_count,GL_UNSIGNED_SHORT, 0);
 }
+
 void draw_multiple_primitive_env(unsigned int shaderProgram,unsigned int env_vao,primitive_env* primitives, size_t primitive_count){
 	glUseProgram(shaderProgram);
 	glBindVertexArray(env_vao);
@@ -477,6 +502,7 @@ void draw_multiple_primitive_env(unsigned int shaderProgram,unsigned int env_vao
 		glDrawElementsBaseVertex(GL_TRIANGLES, primitives[i].indices_count, GL_UNSIGNED_SHORT, (void*)(primitives[i].index_index * 2), primitives[i].base_vertex);
 	}
 }
+
 unsigned int upload_multiple_primitive_env(primitive_env* primitives, size_t primitive_count){
 	// smash env mesh into a single buffer, 
 	unsigned int vbos_env;
@@ -528,11 +554,16 @@ int main()
 
 	// load primitives for env model into memory
 	primitive_env primitives_env[MAX_PRIMITIVES];
-	size_t primitive_count = load_model_env("/mnt/Windows/Data/Models/sponza/sponza_bckup.gltf",primitives_env,0);
-	printf("\nPrimitives_env count %li",primitive_count);
+	size_t primitive_count_env = load_model_env("/mnt/Windows/Data/Models/sponza/sponza_bckup.gltf",primitives_env,0);
+	printf("\nPrimitives_env count %li",primitive_count_env);
 
-	//drawable_mesh mesh = upload_single_primitive_env(primitives_env[0]);
-	unsigned int env_vao =  upload_multiple_primitive_env(primitives_env,primitive_count);
+	// load primitives for actors into mem
+	primitive_actor primitives_actor[MAX_PRIMITIVES];
+	//size_t primitive_count_actor = load_model_actor("models/simple_skin.gltf",primitives_actor,0);
+
+	unsigned int env_vao =  upload_multiple_primitive_env(primitives_env,primitive_count_env);
+
+	drawable_mesh mesh = upload_single_primitive_actor(primitives_actor[0]);
 
     // uncomment this call to draw in wireframe polygons.
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -552,7 +583,9 @@ int main()
 		// draw envs
 
 		//draw_single_primitive_env(shaderProgram,mesh);
-		draw_multiple_primitive_env(shaderProgram,env_vao, primitives_env,primitive_count);
+		draw_multiple_primitive_env(shaderProgram,env_vao, primitives_env,primitive_count_env);
+
+		// draw actors
 	
         // glBindVertexArray(0); // no need to unbind it every time 
  
