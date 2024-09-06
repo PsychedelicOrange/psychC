@@ -166,7 +166,7 @@ void load_primitives_actor (cgltf_mesh* mesh, primitive_actor* primitives, size_
 		primitive_actor p;
 		size_t attribute_count = mesh->primitives[i].attributes_count;
 		cgltf_attribute* attributes = mesh->primitives[i].attributes;
-		p.vertices = malloc(sizeof(vertex_env)*attributes[0].data->count);
+		p.vertices = malloc(sizeof(vertex_actor)*attributes[0].data->count);
 		p.vertex_count = attributes[0].data->count;
 
 		// load indices 
@@ -465,6 +465,7 @@ drawable_mesh upload_single_primitive_actor(primitive_actor p){
 	glBindVertexArray(0); 
 	return m;
 }
+
 drawable_mesh upload_single_primitive_env(primitive_env p){
 	// upload single primtive into ogl buffer
 	// load model primitive into buffers and return ids
@@ -489,6 +490,7 @@ drawable_mesh upload_single_primitive_env(primitive_env p){
 }
 
 void draw_single_primitive_env(unsigned int shaderProgram,drawable_mesh d){
+	printf("\nd.indices_count: %li",d.indices_count);
 	glUseProgram(shaderProgram);
 	glBindVertexArray(d.vao);
 	glDrawElements(GL_TRIANGLES, d.indices_count,GL_UNSIGNED_SHORT, 0);
@@ -541,15 +543,25 @@ int main()
 	GLFWwindow* window = create_glfw_window();
 	init_glad();
 
-	unsigned int shaderProgram;
+	unsigned int environmentShader;
 	{
 		char vertexShaderCode[FILE_SIZE_SHADER_MAX];
 		char fragmentShaderCode[FILE_SIZE_SHADER_MAX];
-		read_string_from_disk("/home/parth/code/psychC/shaders/vertex.vs",vertexShaderCode);
-		read_string_from_disk("/home/parth/code/psychC/shaders/fragment.fs",fragmentShaderCode);
+		read_string_from_disk("/home/parth/code/psychC/shaders/env.vs",vertexShaderCode);
+		read_string_from_disk("/home/parth/code/psychC/shaders/env.fs",fragmentShaderCode);
 		unsigned int vertexShader = compile_shader(vertexShaderCode, GL_VERTEX_SHADER);
 		unsigned int fragmentShader = compile_shader(fragmentShaderCode, GL_FRAGMENT_SHADER);
-		shaderProgram = create_program(vertexShader,fragmentShader);
+		environmentShader = create_program(vertexShader,fragmentShader);
+	}
+	unsigned int actorShader;
+	{
+		char vertexShaderCode[FILE_SIZE_SHADER_MAX];
+		char fragmentShaderCode[FILE_SIZE_SHADER_MAX];
+		read_string_from_disk("/home/parth/code/psychC/shaders/actor.vs",vertexShaderCode);
+		read_string_from_disk("/home/parth/code/psychC/shaders/actor.fs",fragmentShaderCode);
+		unsigned int vertexShader = compile_shader(vertexShaderCode, GL_VERTEX_SHADER);
+		unsigned int fragmentShader = compile_shader(fragmentShaderCode, GL_FRAGMENT_SHADER);
+		actorShader = create_program(vertexShader,fragmentShader);
 	}
 
 	// load primitives for env model into memory
@@ -559,7 +571,7 @@ int main()
 
 	// load primitives for actors into mem
 	primitive_actor primitives_actor[MAX_PRIMITIVES];
-	//size_t primitive_count_actor = load_model_actor("models/simple_skin.gltf",primitives_actor,0);
+	size_t primitive_count_actor = load_model_actor("models/simple_skin.gltf",primitives_actor,0);
 
 	unsigned int env_vao =  upload_multiple_primitive_env(primitives_env,primitive_count_env);
 
@@ -583,10 +595,12 @@ int main()
 		// draw envs
 
 		//draw_single_primitive_env(shaderProgram,mesh);
-		draw_multiple_primitive_env(shaderProgram,env_vao, primitives_env,primitive_count_env);
+		draw_multiple_primitive_env(environmentShader,env_vao, primitives_env,primitive_count_env);
 
 		// draw actors
-	
+		draw_single_primitive_env(actorShader,mesh);
+		
+		
         // glBindVertexArray(0); // no need to unbind it every time 
  
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -600,7 +614,7 @@ int main()
     //glDeleteVertexArrays(1, &vao[0]);
     //glDeleteBuffers(1, &vbo[0]);
     //glDeleteBuffers(1, &ebo[0]);
-    glDeleteProgram(shaderProgram);
+    glDeleteProgram(environmentShader);
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
