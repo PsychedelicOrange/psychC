@@ -7,13 +7,10 @@ project(
 	LANGUAGES CXX C
 	)
 
+file(GLOB_RECURSE srcfiles     src/*.c src/*.h)
 
 add_executable(psychspiration 
-	src/main.c
-	src/glad.c
-	src/constants.h
-	src/disk.c
-	src/disk.h
+	${srcfiles}
 	)
 
 target_compile_options(psychspiration PRIVATE -Wall )

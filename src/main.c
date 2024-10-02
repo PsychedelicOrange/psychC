@@ -1,130 +1,22 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
+#include <cglm/struct.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#define CGLTF_IMPLEMENTATION
 #include "disk.h"
 #include "constants.h"
 #include "mesh.h"
-#define CGLTF_IMPLEMENTATION
-#include "cgltf.h"
+#include "boiler.h"
+#include "shader.h"
+#include "env.h"
 // --- -- -- - -- - - Defines move them to constants lateer -- -- -- - -- 
 #define MAX_MESHES_PER_FILE 100
-#define MAX_PRIMITIVES 1000
-#define MAX_BONES_PER_MESH 100
-#define MAX_PRIMITIVES_PER_MESH 100
-
 
 // -- -- -- -- -- -- Function declare -- -- -- -- -- --- --
-
-
-struct mesh load_mesh(cgltf_mesh* cmesh);
-struct primitive load_primitive(cgltf_primitive p);
-
-void crash_game(char* msg);
-
-void init_glfw();
-GLFWwindow* create_glfw_window();
-void init_glad();
-
-unsigned int compile_shader(const char* source, int shaderType);
-unsigned int create_program(unsigned int vertexShader,unsigned int fragmentShader);
-
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
-void processInput(GLFWwindow *window);
-
-// -- -- -- -- -- -- Contants -- -- -- -- -- --- --
-// settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
-
-// -- -- -- -- -- -- Structs -- -- -- -- -- --- --
-
-typedef struct buffer{
-	void*  data;
-	size_t size;
-}buffer;
-
-// in out structs aka convinience structs :)
-typedef struct drawable_mesh{
-	unsigned int vao;
-	size_t indices_count;
-}drawable_mesh;
-
-
-// -- -- -- -- -- -- GLFW Functions -- -- -- -- -- --- --
-void init_glfw(){
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-
-}
-
-GLFWwindow* create_glfw_window(){
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "psychspiration", NULL, NULL);
-    if (window == NULL)
-    {
-		crash_game("Unable to create glfw window");
-        glfwTerminate();
-    }
-    glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	return window;
-}
-
-void init_glad(){
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-		crash_game("failed to initialize glad");
-    }
-	const GLubyte* vendor = glGetString(GL_VENDOR); // Returns the vendor
-	const GLubyte* renderer = glGetString(GL_RENDERER); // Returns a hint to the model
-	printf("\nVendor: %s",vendor);
-	printf("\nRenderer: %s",renderer);
-}
-// -- -- -- -- -- -- Shader functions -- -- -- -- -- --- --
-//
-unsigned int compile_shader(const char * shaderCode, int shaderType){
-	unsigned int shader = glCreateShader(shaderType);
-	glShaderSource(shader, 1, &shaderCode, NULL);
-	glCompileShader(shader);
-	// check for shader compile errors
-	int success;
-	char infoLog[512];
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-	if (!success)
-	{
-		glGetShaderInfoLog(shader, 512, NULL, infoLog);
-		printf("failed to compile shader: %s", infoLog);
-		return -1;
-	}
-	return shader;
-}
-
-unsigned int create_program(unsigned int vertexShader, unsigned int fragmentShader){
-    unsigned int shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    // check for linking errors
-	int success;
-	char infoLog[512];
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-		printf("failed to link shaders: %s",infoLog);
-		return -1;
-    }
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-	return shaderProgram;
-}
 
 // -- -- -- -- -- -- Engine Helpers Functions -- -- -- -- -- --- --
 void crash_game(char* msg){
@@ -133,10 +25,88 @@ void crash_game(char* msg){
 	exit(1);
 }
 
-// -- -- -- -- -- -- Cgltf parse helper functions -- -- -- -- - -
+// -- -- -- -- -- -- Math functions -- -- -- -- - -
 //
-int cgltf_ctype_to_gl_type[7] = {GL_INVALID_VALUE,GL_BYTE,GL_UNSIGNED_BYTE,GL_SHORT,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT,GL_FLOAT};
-int cgltf_ctype_to_bytes[7] = {-1,1,1,2,2,4,4};
+void print_vec3(float* vec){
+	printf("(%f,%f,%f)",vec[0],vec[1],vec[2]);
+}
+void print_vec4(float* vec){
+	printf("(%f,%f,%f,%f)",vec[0],vec[1],vec[2],vec[3]);
+}
+void print_mat4_ptr(float* mat){
+	printf("\n[\n");
+	for(int i =0; i < 4; i++){
+		for(int j =0; j < 4; j++){
+			printf("%f,",mat[(4*i)+j]);
+		}
+		printf("\n");
+	}
+	printf("]\n");
+}
+void print_mat4(float mat[4][4]){
+	printf("\n[\n");
+	for(int i =0; i < 4; i++){
+		for(int j =0; j < 4; j++){
+			printf("%f,",mat[i][j]);
+		}
+		printf("\n");
+	}
+	printf("\n]\n");
+}
+const float id_mat4[16] = { 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 };
+
+void mat_mul(float matrix[16], float mat1[16], float mat2[16]){
+	for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			matrix[4*i+j] = 0;
+			for (int k = 0; k < 4; k++) {
+				matrix[4*i+j] += mat1[4*i+k] * mat2[4*k+j];
+			}
+		}
+	}
+}
+
+void translate(float* matrix,float translation[3]){
+	matrix[12] += translation[0];
+	matrix[13] += translation[1];
+	matrix[14] += translation[2];
+}
+
+void scale(float* matrix,float scale[3]){
+	matrix[0] *= scale[0];
+	matrix[5] *= scale[1];
+	matrix[10] *= scale[2];
+}
+
+void rotate(float* matrix,float rotation[4]){
+ 	float rotmat[16];
+	float x = rotation[0];
+	float y = rotation[1];
+	float z = rotation[2];
+	float s = rotation[3];
+	rotmat[0] = 1 - (2*y*y) - (2*z*z); rotmat[1] = (2*x*y) - (2*s*z); rotmat[2] = (2*x*z) + (2*s*z); rotmat[3] = 0;
+	rotmat[4] = (2*x*y) + (2*s*z); rotmat[5] = 1 - (2*x*x) - (2*z*z); rotmat[6] = (2*z*y) - (2*s*x); rotmat[7] = 0;
+	rotmat[8] = (2*z*x) - (2*s*y); rotmat[9] = (2*x*y) + (2*s*x); rotmat[10] = 1 - (2*x*x) - (2*y*y); rotmat[11] = 0;
+	rotmat[12] = 0; rotmat[13] = 0; rotmat[14] = 0; rotmat[15] = 1;
+	float copy[16];
+	memcpy(copy,matrix,sizeof(float)*16);
+	mat_mul(matrix,copy,rotmat);
+}
+
+void get_matrix_from_trs(float* matrix,float translation[3],float rotation[4],float s[3]){
+	memcpy(matrix,id_mat4,16*sizeof(float));
+	translate(matrix,translation);
+	//printf("\nAfter translation:");
+	//print_mat4_ptr(matrix);
+	rotate(matrix,rotation);
+	//printf("\nAfter rotation:");
+	//print_mat4_ptr(matrix);
+	scale(matrix,s);
+	//printf("\nAfter scale:");
+	//print_mat4_ptr(matrix);
+}
+
+// -- -- -- -- -- -- Cgltf parse helper functions -- -- -- -- - - int cgltf_ctype_to_gl_type[7] = {GL_INVALID_VALUE,GL_BYTE,GL_UNSIGNED_BYTE,GL_SHORT,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT,GL_FLOAT};
 void print_indices(cgltf_accessor* indices){
 	cgltf_buffer_view* buf_view = indices->buffer_view;
 	printf("\n INDICES:");
@@ -160,7 +130,40 @@ void print_accessor(cgltf_accessor *accessor ){
 	printf("\n\t\t buffer_view.offset:\t%li",buf_view->offset);
 	printf("\n\t\t buffer_view.size:\t%li",buf_view->size);
 }
-void load_primitives_actor (cgltf_mesh* mesh, primitive_actor* primitives, size_t primitive_index){
+void print_vertex_actor(vertex_actor a){
+	//printf("\nfloat position[3]:");
+	//print_vec3(a.position);
+	//printf("\nfloat normal[3]:");
+	//print_vec3(a.normal);
+	//printf("\nfloat tangent[4]:");
+	//print_vec4(a.tangent);
+	printf("\nunsigned short joints[4]:");
+	printf("(%u,%u,%u,%u)",a.joints[0],a.joints[1],a.joints[2],a.joints[3]);
+	//printf("\nfloat weights[4]:");
+	//print_vec4(a.weights);
+}
+
+void print_mesh_actor(mesh_actor mesh_actor){
+	printf("\n Mesh:");
+	printf("\n Skin:");
+	printf("\n\t No. of joints:\t %li",mesh_actor.joints_count);
+	for(size_t i  = 0 ; i < mesh_actor.joints_count;i++){
+		printf("\n\tJoint \t %li:",i);
+		printf("\n\t\tIndex \t %i:",mesh_actor.joints[i].index);
+		printf("\n\t\tTranslation \t :");
+		print_vec3(mesh_actor.joints[i].translation);
+		printf("\n\t\tRotation \t :");
+		print_vec4(mesh_actor.joints[i].rotation);
+		printf("\n\t\tChildren \t (%li) :",mesh_actor.joints[i].children_count);
+		printf("[");
+		for(size_t j = 0; j < mesh_actor.joints[i].children_count;j++){
+			printf("%i,",mesh_actor.joints[i].children[j]);
+		}
+		printf("]");
+	}
+}
+
+void load_primitives_actor (cgltf_mesh* mesh, mesh_actor* emesh){
 	size_t mpriv_count = mesh->primitives_count;
 	for(size_t i = 0; i < mpriv_count;i++){
 		primitive_actor p;
@@ -223,114 +226,175 @@ void load_primitives_actor (cgltf_mesh* mesh, primitive_actor* primitives, size_
 					}
 					break;
 				case cgltf_attribute_type_joints:
-					assert(accessor->component_type == cgltf_component_type_r_16u);
+					assert(accessor->component_type == cgltf_component_type_r_8u || accessor->component_type == cgltf_component_type_r_16u);
 					assert(accessor->type == 4);
-					for(size_t k = 0; k < p.vertex_count; k++){
-						memcpy(p.vertices[k].uv,att_buf,sizeof(unsigned short)*4);
-						att_buf = (void*) ((char*)att_buf + accessor->stride);
+					if(accessor->component_type == cgltf_component_type_r_8u ){
+						for(int i = 0 ; i < p.vertex_count;i++){
+							p.vertices[i].joints[0]= (unsigned short)(((char*)att_buf)[0]);
+							p.vertices[i].joints[1]= (unsigned short)(((char*)att_buf)[1]);
+							p.vertices[i].joints[2]= (unsigned short)(((char*)att_buf)[2]);
+							p.vertices[i].joints[3]= (unsigned short)(((char*)att_buf)[3]);
+							att_buf = (void*) ((char*)att_buf + accessor->stride);
+						}
+					}else{
+						for(size_t k = 0; k < p.vertex_count; k++){
+							memcpy(p.vertices[k].joints,att_buf,sizeof(unsigned short)*4);
+							att_buf = (void*) ((char*)att_buf + accessor->stride);
+						}
 					}
 					break;
 				case cgltf_attribute_type_weights:
 					assert(accessor->component_type == cgltf_component_type_r_32f);
 					assert(accessor->type == 4);
 					for(size_t k = 0; k < p.vertex_count; k++){
-						memcpy(p.vertices[k].uv,att_buf,sizeof(float)*4);
+						memcpy(p.vertices[k].weights,att_buf,sizeof(float)*4);
 						att_buf = (void*) ((char*)att_buf + accessor->stride);
 					}
 					break;
 				default:
-					printf("Environment mesh doesn't support : %s",attributes[j].name);
+					printf("\nActor mesh doesn't support : %s",attributes[j].name);
 			}
 			fflush(stdout);	
 		}
-		primitives[primitive_index++] = p;
+		for(int i =0; i < p.vertex_count; i++){
+			print_vertex_actor(p.vertices[i]);
+		}
+		emesh->primitives[i] = p;
 	}
 }
 
-void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t primitive_index){
-	size_t mpriv_count = mesh->primitives_count;
-	for(size_t i = 0; i < mpriv_count;i++){
-		primitive_env p;
-		size_t attribute_count = mesh->primitives[i].attributes_count;
-		cgltf_attribute* attributes = mesh->primitives[i].attributes;
-		p.vertices = malloc(sizeof(vertex_env)*attributes[0].data->count);
-		p.vertex_count = attributes[0].data->count;
-		int ti=0;
 
-		// load indices 
-		if(mesh->primitives[i].indices != NULL){
-			cgltf_accessor* indices = mesh->primitives[i].indices;
-			assert(indices->component_type == cgltf_component_type_r_16u);
-			cgltf_buffer_view* buf_view = indices->buffer_view;
-			p.indices_count = indices->count;
-			p.indices = malloc(sizeof(unsigned short)*p.indices_count);
-			memcpy(p.indices,buf_view->buffer->data + buf_view->offset + indices->offset,buf_view->size);
-		}else{
-			crash_game("encountered un-indexed mesh data. eww.");
-		}
-		
-		for(size_t j =0; j < attribute_count;j++){
+joint load_joint(cgltf_data* data, cgltf_node* jnode){
+	joint j;
+	if(jnode->name != NULL)
+		j.name = strdup(jnode->name);
 
-			cgltf_accessor *accessor = attributes[j].data;
-			cgltf_buffer_view* buf_view = accessor->buffer_view;
+	if(jnode->has_translation){
+		memcpy(j.translation,jnode->translation,sizeof(float)*4);
+	}else{
+		memset(j.translation,0,sizeof(float)*4);
+	}
 
-			void* att_buf = buf_view->buffer->data + buf_view->offset + accessor->offset;
-			size_t att_size = buf_view->size;
+	if(jnode->has_rotation){
+		memcpy(j.rotation,jnode->rotation,sizeof(float)*4);
+	}else{
+		memset(j.rotation,0,sizeof(float)*3);
+		j.rotation[3] = 1;
+	}
 
-			switch(attributes[j].type){
-				case cgltf_attribute_type_position:
-					assert(accessor->component_type == cgltf_component_type_r_32f);
-					assert(accessor->type == 3);
-					for(size_t k = 0; k < p.vertex_count; k++){
-						memcpy(p.vertices[k].position,att_buf,sizeof(float)*3);
-						att_buf = (void*) ((char*)att_buf + accessor->stride);
+	j.index = jnode - data->nodes;
+	j.children_count = jnode->children_count;
+	for(int i = 0; i < j.children_count; i++){
+		if(jnode == jnode->children[i]) assert(false);
+		j.children[i] = jnode->children[i] - data->nodes;
+	}
+	return j;
+}
+void load_ibm(cgltf_skin* skin ,mesh_actor* mesh){
+	cgltf_accessor *accessor = skin->inverse_bind_matrices;
+	cgltf_buffer_view* buf_view = accessor->buffer_view;
+	printf("\nIBM accessor:");
+	print_accessor(accessor);
+	assert(accessor->component_type == cgltf_component_type_r_32f);
+	assert(accessor->type == cgltf_type_mat4);
+
+	void* att_buf = buf_view->buffer->data + buf_view->offset + accessor->offset;
+	size_t att_size = buf_view->size;
+	for(size_t k = 0; k < accessor->count; k++){
+		memcpy(mesh->joints[k].inverseBindMatrice ,att_buf,sizeof(float)*16);
+		print_mat4_ptr((float*)att_buf);
+		att_buf = (void*) ((char*)att_buf + accessor->stride);
+	}
+}
+
+void load_skin(cgltf_data* data,cgltf_skin* skin, mesh_actor* mesh){
+	for(int i = 0 ; i  < skin->joints_count; i++)
+	{
+		mesh->joints[i] = load_joint(data,skin->joints[i]);
+	}
+	// load the inverseBindMatrices
+	load_ibm(skin,mesh);
+	// load weights and morph targets here in future
+}
+
+size_t getBytesPerElement(cgltf_accessor* acc){
+	cgltf_component_type ctype = acc->component_type;
+	cgltf_type type = acc->type;
+	int cgltf_ctype_to_bytes[] = {-1,1,1,2,2,4,4};
+	int cgltf_type_to_count[]= {-1,1,2,3,4,4,9,16};	
+	return cgltf_ctype_to_bytes[ctype]*type;
+}
+buffer load_accessor(cgltf_accessor* acc){
+	buffer buf;
+	cgltf_buffer_view* buf_view = acc->buffer_view;
+	printf("\n Loading accessor");
+	print_accessor(acc);
+	void* att_buf = buf_view->buffer->data + buf_view->offset + acc->offset;
+	size_t att_size = buf_view->size;
+	// get size of individual attribute from types;
+	int elSize = getBytesPerElement(acc);
+	buf.size = elSize * acc->count;
+	buf.data = malloc(elSize* acc->count);
+
+	printf("\n\tAccessor element size in bytes: %i",elSize);
+	for(int i = 0; i < acc->count; i++){
+		memcpy((void*)((char*)buf.data+(elSize*i)),att_buf,elSize);
+		att_buf = (void*) ((char*)att_buf + acc->stride);
+	}
+	return buf;
+}
+
+sampler load_sampler(cgltf_animation_sampler* gsamp){
+	sampler sampler;
+	sampler.interpolation = (interpolation)gsamp->interpolation;
+	sampler.keyframes = load_accessor(gsamp->input);
+	sampler.data = load_accessor(gsamp->output);
+	sampler.element_size = getBytesPerElement(gsamp->output) * gsamp->output->count;
+
+////for(int i =0; i < sampler.keyframes.size / 4; i++){
+////	printf("\nKeyframe %i at time: %f",i,((float*)sampler.keyframes.data)[i]);
+////	printf("\tRotation: ( %f, %f, %f, %f) ",((float*)sampler.data.data)[4*i],((float*)sampler.data.data)[4*i + 1],((float*)sampler.data.data)[4*i + 2],((float*)sampler.data.data)[4*i +3]);
+////}
+///
+	return sampler;
+}
+
+void load_animations(cgltf_data* data,mesh_actor* mesh){
+	int anim_count = data->animations_count;
+	assert( anim_count < 10);
+	mesh->animations_count = anim_count;
+	for(int i = 0; i < anim_count; i++){
+		printf("\n Animation found: %s",data->animations[i].name);
+		animation animation;
+		animation.channels_count = data->animations[i].channels_count;
+		animation.channels = malloc(sizeof(channel)*animation.channels_count);
+		for(int c = 0;c < animation.channels_count; c ++){
+			cgltf_animation_channel channel = data->animations[i].channels[c];	
+			animation.channels[c].property = channel.target_path - 1;
+			animation.channels[c].sampler = load_sampler(channel.sampler);
+			// store address of animated property in the data_ptr for easy update
+			for(int j = 0; j < mesh->joints_count; j++){
+				if(mesh->joints[j].index == channel.target_node - data->nodes){
+					if(animation.channels[c].property == prop_translation){
+						animation.channels[c].data_ptr = mesh->joints[j].translation;
+						break;
 					}
-					break;
-				case cgltf_attribute_type_normal:
-					assert(accessor->component_type == cgltf_component_type_r_32f);
-					assert(accessor->type == 3);
-					for(size_t k = 0; k < p.vertex_count; k++){
-						memcpy(p.vertices[k].normal,att_buf,sizeof(float)*3);
-						att_buf = (void*) ((char*)att_buf + accessor->stride);
+					if(animation.channels[c].property == prop_rotation){
+						animation.channels[c].data_ptr = mesh->joints[j].rotation;
+						break;
 					}
-					break;
-				case cgltf_attribute_type_tangent:
-					assert(accessor->component_type == cgltf_component_type_r_32f);
-					assert(accessor->type == 4);
-					for(size_t k = 0; k < p.vertex_count; k++){
-						memcpy(p.vertices[k].tangent,att_buf,sizeof(float)*4);
-						att_buf = (void*) ((char*)att_buf + accessor->stride);
-					}
-					break;
-				case cgltf_attribute_type_texcoord:
-					assert(accessor->component_type == cgltf_component_type_r_32f);
-					assert(accessor->type == 2);
-					if(ti++){
-						for(size_t k = 0; k < p.vertex_count; k++){
-							memcpy(p.vertices[k].uv,att_buf,sizeof(float)*2);
-							att_buf = (void*) ((char*)att_buf + accessor->stride);
-						}
-					}else{
-						for(size_t k = 0; k < p.vertex_count; k++){
-							memcpy(p.vertices[k].uv1,att_buf,sizeof(float)*2);
-							att_buf = (void*) ((char*)att_buf + accessor->stride);
-						}
-					}
-					break;
-				default:
-					printf("Environment mesh doesn't support : %s",attributes[j].name);
+				}
 			}
-			fflush(stdout);	
 		}
-		primitives[primitive_index++] = p;
+		mesh->animations[i] = animation;
 	}
 }
 
-size_t load_model_actor(char* model_path, primitive_actor* primitives, size_t primitive_index){
-	assert(primitive_index < MAX_PRIMITIVES);
-	cgltf_options options = {0};
+size_t load_model_actor(char* model_path, mesh_actor* meshes, size_t meshes_index){
+	cgltf_options options = {0}; 
 	cgltf_data* data = NULL;
 	cgltf_result result = cgltf_parse_file(&options,model_path, &data);
+
 	if (result == cgltf_result_success)
 	{
 		result = cgltf_load_buffers(&options, data, model_path);
@@ -338,95 +402,38 @@ size_t load_model_actor(char* model_path, primitive_actor* primitives, size_t pr
 			printf("cgltf couldn't load buffers : %i",result);
 			crash_game("could'nt load model");
 		}
-		size_t meshes_count = data->meshes_count;
-		cgltf_mesh* meshes = data->meshes;
-		for(int i=0; i< meshes_count; i++){
-			load_primitives_actor(meshes,primitives,primitive_index);
-			primitive_index += meshes->primitives_count;
+
+		// load meshes and associate skin
+		size_t nodes_count = data->nodes_count;
+		cgltf_node* nodes = data->nodes;
+		for(int i=0; i< nodes_count; i++){
+			if(nodes[i].mesh != NULL){
+				mesh_actor mesh_actor;
+				mesh_actor.primitives_count = nodes[i].mesh->primitives_count;
+				mesh_actor.primitives = malloc(sizeof(primitive_actor)*mesh_actor.primitives_count);
+				load_primitives_actor(nodes[i].mesh,&mesh_actor);
+
+				if(nodes[i].skin != NULL){
+					printf("\n Skin: %s",nodes[i].skin->name);
+					printf("\n\t Joints_count : %li",nodes[i].skin->joints_count);
+					fflush(stdout);
+					mesh_actor.joints_count = nodes[i].skin->joints_count;
+					mesh_actor.joints = malloc(sizeof(joint)*mesh_actor.joints_count);
+					load_skin(data,nodes[i].skin,&mesh_actor);
+					load_animations(data,&mesh_actor);
+					print_mesh_actor(mesh_actor);
+				}
+				meshes[meshes_index++] = mesh_actor;
+			}
 		}
 
 	}else{
 		crash_game("Please check if model exists!");
 	}
 	cgltf_free(data);
-	return primitive_index;
+	return meshes_index;
 }
 
-size_t load_model_env(char* model_path, primitive_env* primitives, size_t primitive_index){
-	assert(primitive_index < MAX_PRIMITIVES);
-	cgltf_options options = {0};
-	cgltf_data* data = NULL;
-	cgltf_result result = cgltf_parse_file(&options,model_path, &data);
-	if (result == cgltf_result_success)
-	{
-		result = cgltf_load_buffers(&options, data, model_path);
-		if (result != cgltf_result_success){
-			printf("cgltf couldn't load buffers : %i",result);
-			crash_game("could'nt load model");
-		}
-		size_t meshes_count = data->meshes_count;
-		cgltf_mesh* meshes = data->meshes;
-		for(int i=0; i< meshes_count; i++){
-			load_primitives_env(meshes,primitives,primitive_index);
-			primitive_index += meshes->primitives_count;
-		}
-
-	}else{
-		crash_game("Please check if model exists!");
-	}
-	cgltf_free(data);
-	return primitive_index;
- }
-
-// ---- - -- -- -- ---- -- -- -- upload ogl  helper functions -- -- -- -- -- -- -- 
-
-buffer append_primitive_vertice_data(primitive_env* primitives,size_t from,size_t to){
-	vertex_env* vertices;
-	size_t vertice_count =0;
-	for(int i = from; i < to; i++){
-		primitives[i].base_vertex = vertice_count;
-		vertice_count += primitives[i].vertex_count;
-	}
-	printf("\nTotal vertice count for environment mesh: %li",vertice_count);
-	vertices = malloc(sizeof(vertex_env)*vertice_count);
-	vertex_env* ptr = vertices;
-	for(int i = from; i < to; i++){
-		memcpy(ptr,primitives[i].vertices,primitives[i].vertex_count*sizeof(vertex_env));
-		ptr += primitives[i].vertex_count;
-	}
-	buffer buf = {vertices,vertice_count*sizeof(vertex_env)};
-	return buf;
-}
-
-buffer append_primitive_indice_data(primitive_env* primitives,size_t from,size_t to){
-	unsigned short* indices;
-	size_t indices_count = 0;
-	for(int i = from; i < to; i++){
-		primitives[i].index_index = indices_count;
-		indices_count += primitives[i].indices_count;
-	}
-	printf("\nTotal indice count for environment mesh: %li",indices_count);
-	indices = malloc(sizeof(unsigned short)*indices_count);
-	unsigned short* ptr = indices;
-	for(int i = from; i < to; i++){
-		memcpy(ptr,primitives[i].indices,primitives[i].indices_count*sizeof(unsigned short));
-		ptr += primitives[i].indices_count;
-	}
-	buffer buf = {indices,indices_count*sizeof(unsigned short)};
-	return buf;
-}
-void vertexAttrib_env(){
-	glEnableVertexAttribArray(0);	
-	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,position)));
-	glEnableVertexAttribArray(1);	
-	glVertexAttribPointer(1,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,normal)));
-	glEnableVertexAttribArray(2);	
-	glVertexAttribPointer(2,4,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,tangent)));
-	glEnableVertexAttribArray(3);	
-	glVertexAttribPointer(3,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv)));
-	glEnableVertexAttribArray(4);	
-	glVertexAttribPointer(4,2,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,uv1)));
-}
 
 void vertexAttrib_actor(){
 	glEnableVertexAttribArray(0);	
@@ -440,7 +447,7 @@ void vertexAttrib_actor(){
 	glEnableVertexAttribArray(4);	
 	glVertexAttribPointer(4,4,GL_UNSIGNED_SHORT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,joints)));
 	glEnableVertexAttribArray(5);	
-	glVertexAttribPointer(4,4,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,weights)));
+	glVertexAttribPointer(5,4,GL_FLOAT, GL_FALSE, sizeof(vertex_actor), (void*)(offsetof(vertex_actor,weights)));
 }
 
 drawable_mesh upload_single_primitive_actor(primitive_actor p){
@@ -466,81 +473,51 @@ drawable_mesh upload_single_primitive_actor(primitive_actor p){
 	return m;
 }
 
-drawable_mesh upload_single_primitive_env(primitive_env p){
-	// upload single primtive into ogl buffer
-	// load model primitive into buffers and return ids
-	unsigned int ebo,vbo;
-	drawable_mesh m = {0};
-	m.indices_count = p.indices_count;
-	glGenVertexArrays(1,&m.vao);
-	glGenBuffers(1, &vbo);
-	glGenBuffers(1, &ebo);
+void calc_joint_matrices(float* matrices,mesh_actor mesh_actor){
+	size_t jc = mesh_actor.joints_count;
+	float* ptr = matrices;
+	for(int i =0; i < jc; i++){
+		joint* j = &mesh_actor.joints[i];
+		// calculate local transform
+		mat4 m;
+		glm_translate_make(m,j->translation);
+		mat4 rotated;
+		glm_quat_rotate(m,j->rotation,rotated);
+		mat4 matmul;
 
-	glBindVertexArray(m.vao); 
-	glBindBuffer(GL_ARRAY_BUFFER,vbo);
-	glBufferData(GL_ARRAY_BUFFER, p.vertex_count*sizeof(vertex_env),p.vertices,GL_STATIC_DRAW);
-
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, p.indices_count*sizeof(unsigned short),p.indices,GL_STATIC_DRAW);
-	vertexAttrib_env();
-	glEnableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0); 
-	glBindVertexArray(0); 
-	return m;
+		//glm_mat4_mul(rotated,&(j->inverseBindMatrice[0][0]),m);
+		//mat_mul(ptr,matrix,&(j->inverseBindMatrice[0][0]));
+		// printf("\nFinal matrix transform");
+		// print_mat4_ptr(ptr);
+		// no need to transform children! this is just skinning !
+	ptr += 16;}
+	
 }
 
-void draw_single_primitive_env(unsigned int shaderProgram,drawable_mesh d){
-	printf("\nd.indices_count: %li",d.indices_count);
-	glUseProgram(shaderProgram);
-	glBindVertexArray(d.vao);
-	glDrawElements(GL_TRIANGLES, d.indices_count,GL_UNSIGNED_SHORT, 0);
-}
-
-void draw_multiple_primitive_env(unsigned int shaderProgram,unsigned int env_vao,primitive_env* primitives, size_t primitive_count){
-	glUseProgram(shaderProgram);
-	glBindVertexArray(env_vao);
-	for(int i = 0; i < primitive_count;i++){
-		//printf("\nglDrawElementsBaseVertex(GL_TRIANGLES, %li, GL_UNSIGNED_SHORT,(void*) %li, %li)",primitives[i].indices_count, (primitives[i].index_index), primitives[i].base_vertex);
-		glDrawElementsBaseVertex(GL_TRIANGLES, primitives[i].indices_count, GL_UNSIGNED_SHORT, (void*)(primitives[i].index_index * 2), primitives[i].base_vertex);
-	}
-}
-
-unsigned int upload_multiple_primitive_env(primitive_env* primitives, size_t primitive_count){
-	// smash env mesh into a single buffer, 
-	unsigned int vbos_env;
-	unsigned int vaos_env;
-	unsigned int ebos_env;
-	// generate buffers, arrange env data and load the batches into vbos 
-	//
-	glGenVertexArrays(1,&vaos_env);
-	glGenBuffers(1, &vbos_env);
-	glGenBuffers(1, &ebos_env);
-
-	glBindVertexArray(vaos_env); 
-	buffer vertices = append_primitive_vertice_data(primitives,0,primitive_count);
-	printf("Size of vertices buffer: %li",vertices.size);
-	glBindBuffer(GL_ARRAY_BUFFER,vbos_env);
-	glBufferData(GL_ARRAY_BUFFER, vertices.size,vertices.data,GL_STATIC_DRAW);
-	free(vertices.data);
-
-	buffer indices = append_primitive_indice_data(primitives,0,primitive_count);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebos_env);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size,indices.data,GL_STATIC_DRAW);
-	free(indices.data);
-
-	vertexAttrib_env();
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0); 
-	glBindVertexArray(0); 
-
-	return vaos_env;
+int get_previous_index(float currentTime,buffer buffer){
+	// binary search for fun
+	float* array = buffer.data;
+	int size = buffer.size/sizeof(float);
+	int high = size - 1, low = 0;
+	int pred = low - 1;
+	int succ = high + 1;
+	while(low <= high){
+		int i = (high+low)/2;
+		if(array[i] < currentTime){
+			pred = i;
+			low = i+1;
+		}else if(array[i] > currentTime){
+			succ = i;
+			high = i - 1;
+		}else return i;
+	}return pred;
 }
 
 int main()
 {
 
 	init_glfw();
-	GLFWwindow* window = create_glfw_window();
+	GLFWwindow* window = (GLFWwindow*)create_glfw_window(800,600);
 	init_glad();
 
 	unsigned int environmentShader;
@@ -567,38 +544,90 @@ int main()
 	// load primitives for env model into memory
 	primitive_env primitives_env[MAX_PRIMITIVES];
 	size_t primitive_count_env = load_model_env("/mnt/Windows/Data/Models/sponza/sponza_bckup.gltf",primitives_env,0);
-	printf("\nPrimitives_env count %li",primitive_count_env);
+	//size_t primitive_count_env = load_model_env("models/simple_skin.gltf",primitives_env,0);
+	//printf("\nPrimitives_env count %li",primitive_count_env);
 
 	// load primitives for actors into mem
-	primitive_actor primitives_actor[MAX_PRIMITIVES];
-	size_t primitive_count_actor = load_model_actor("models/simple_skin.gltf",primitives_actor,0);
+	// primitive_actor primitives_actor[MAX_PRIMITIVES];
+	/*
+	mesh_actor* mesh_actors = malloc(sizeof(mesh_actor)*MAX_MESHES_PER_FILE);
+	size_t meshes_count = load_model_actor("models/simple_skin.gltf",mesh_actors,0);
+	printf("\nNo. of meshes: %li",meshes_count);
+	*/
 
 	unsigned int env_vao =  upload_multiple_primitive_env(primitives_env,primitive_count_env);
 
-	drawable_mesh mesh = upload_single_primitive_actor(primitives_actor[0]);
+	//drawable_mesh mesh = upload_single_primitive_actor(mesh_actors[0].primitives[0]);
 
     // uncomment this call to draw in wireframe polygons.
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+	//float* joint_matrices = malloc(sizeof(float)*mesh_actors[0].joints_count*16);
+	
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
     {
         // input
         // -----
-        processInput(window);
+		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+		{
+			glfwSetWindowShouldClose(window, true);
+		}
+		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+		{
+		//	mesh_actors[0].animations[0].started = glfwGetTime();
+		}
+			
         // render
         // ------
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-		// draw envs
+		//draw envs
 
-		//draw_single_primitive_env(shaderProgram,mesh);
+		//draw_single_primitive_env(environmentShader,mesh);
 		draw_multiple_primitive_env(environmentShader,env_vao, primitives_env,primitive_count_env);
 
+		// animate - aka change the joint orientations
+		/*
+		{
+			if(mesh_actors[0].animations[0].started == -1){}else{ 
+				for(int i =0; i < mesh_actors[0].animations[0].channels_count; i++){
+					channel* channel = &(mesh_actors[0].animations[0].channels[i]);
+					sampler samp = mesh_actors[0].animations[0].channels[i].sampler;
+					switch(samp.interpolation){
+						case STEP:
+							{
+								float currentTime = glfwGetTime() - mesh_actors[0].animations[0].started;
+								int previousTimeIndex = get_previous_index(currentTime,samp.keyframes);
+								memcpy(channel->data_ptr,&samp.data.data[samp.element_size*previousTimeIndex],samp.element_size);
+							}
+							break;
+						case LINEAR:
+							{
+								float currentTime = glfwGetTime() - mesh_actors[0].animations[0].started;
+								int previousTimeIndex = get_previous_index(currentTime,samp.keyframes);
+								//memcpy(channel->data_ptr,&samp.data.data[samp.keyframse* 
+								float* keyframes =  samp.keyframes.data;
+								int interpolationValue = (currentTime - keyframes[previousTimeIndex]) / (keyframes[previousTimeIndex+1] - keyframes[previousTimeIndex]);
+								//lerp_vec(
+							}
+							break;
+						case CUBICSPLINE:
+							break;
+					}
+				}
+			}
+		}
+		// calc joint matrices from joint orientations and upload to shader
+		calc_joint_matrices(joint_matrices,mesh_actors[0]);
+		int jointmat_loc = glGetUniformLocation(actorShader, "u_jointMat");
+		glUseProgram(actorShader);
+		glUniformMatrix4fv(jointmat_loc,mesh_actors[0].joints_count,GL_FALSE,joint_matrices);	
 		// draw actors
 		draw_single_primitive_env(actorShader,mesh);
+		*/
 		
 		
         // glBindVertexArray(0); // no need to unbind it every time 
@@ -623,13 +652,6 @@ int main()
     return 0;
 }
 
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-// ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow *window)
-{
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-}
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
