@@ -1,6 +1,8 @@
 // add ifnde
 //
 #include <stddef.h>
+#include <cglm/cglm.h>
+#include <cglm/struct.h>
 #include "util.h"
 
 typedef struct vertex_actor{
@@ -24,9 +26,9 @@ typedef struct joint{
 	int index;
 	int children[10];
 	size_t children_count;
-	float translation[4];
-	float inverseBindMatrice[4][4];
-	float rotation[4];
+	mat4s inverseBindMatrice;
+	float translation[3];
+	vec4s rotation;
 }joint;
 
 
@@ -38,8 +40,8 @@ typedef enum animation_property{
 }animation_property;
 
 typedef enum interpolation{
-	STEP,
 	LINEAR,
+	STEP,
 	CUBICSPLINE
 }interpolation;
 

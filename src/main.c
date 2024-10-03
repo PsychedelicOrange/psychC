@@ -25,13 +25,13 @@ void crash_game(char* msg){
 	exit(1);
 }
 
-// -- -- -- -- -- -- Math functions -- -- -- -- - -
+// -- -- -- -- -- -- debug print math functions -- -- -- -- - -
 //
 void print_vec3(float* vec){
 	printf("(%f,%f,%f)",vec[0],vec[1],vec[2]);
 }
 void print_vec4(float* vec){
-	printf("(%f,%f,%f,%f)",vec[0],vec[1],vec[2],vec[3]);
+	printf("\r(%f,%f,%f,%f)",vec[0],vec[1],vec[2],vec[3]);
 }
 void print_mat4_ptr(float* mat){
 	printf("\n[\n");
@@ -52,58 +52,6 @@ void print_mat4(float mat[4][4]){
 		printf("\n");
 	}
 	printf("\n]\n");
-}
-const float id_mat4[16] = { 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 };
-
-void mat_mul(float matrix[16], float mat1[16], float mat2[16]){
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			matrix[4*i+j] = 0;
-			for (int k = 0; k < 4; k++) {
-				matrix[4*i+j] += mat1[4*i+k] * mat2[4*k+j];
-			}
-		}
-	}
-}
-
-void translate(float* matrix,float translation[3]){
-	matrix[12] += translation[0];
-	matrix[13] += translation[1];
-	matrix[14] += translation[2];
-}
-
-void scale(float* matrix,float scale[3]){
-	matrix[0] *= scale[0];
-	matrix[5] *= scale[1];
-	matrix[10] *= scale[2];
-}
-
-void rotate(float* matrix,float rotation[4]){
- 	float rotmat[16];
-	float x = rotation[0];
-	float y = rotation[1];
-	float z = rotation[2];
-	float s = rotation[3];
-	rotmat[0] = 1 - (2*y*y) - (2*z*z); rotmat[1] = (2*x*y) - (2*s*z); rotmat[2] = (2*x*z) + (2*s*z); rotmat[3] = 0;
-	rotmat[4] = (2*x*y) + (2*s*z); rotmat[5] = 1 - (2*x*x) - (2*z*z); rotmat[6] = (2*z*y) - (2*s*x); rotmat[7] = 0;
-	rotmat[8] = (2*z*x) - (2*s*y); rotmat[9] = (2*x*y) + (2*s*x); rotmat[10] = 1 - (2*x*x) - (2*y*y); rotmat[11] = 0;
-	rotmat[12] = 0; rotmat[13] = 0; rotmat[14] = 0; rotmat[15] = 1;
-	float copy[16];
-	memcpy(copy,matrix,sizeof(float)*16);
-	mat_mul(matrix,copy,rotmat);
-}
-
-void get_matrix_from_trs(float* matrix,float translation[3],float rotation[4],float s[3]){
-	memcpy(matrix,id_mat4,16*sizeof(float));
-	translate(matrix,translation);
-	//printf("\nAfter translation:");
-	//print_mat4_ptr(matrix);
-	rotate(matrix,rotation);
-	//printf("\nAfter rotation:");
-	//print_mat4_ptr(matrix);
-	scale(matrix,s);
-	//printf("\nAfter scale:");
-	//print_mat4_ptr(matrix);
 }
 
 // -- -- -- -- -- -- Cgltf parse helper functions -- -- -- -- - - int cgltf_ctype_to_gl_type[7] = {GL_INVALID_VALUE,GL_BYTE,GL_UNSIGNED_BYTE,GL_SHORT,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT,GL_FLOAT};
@@ -153,7 +101,7 @@ void print_mesh_actor(mesh_actor mesh_actor){
 		printf("\n\t\tTranslation \t :");
 		print_vec3(mesh_actor.joints[i].translation);
 		printf("\n\t\tRotation \t :");
-		print_vec4(mesh_actor.joints[i].rotation);
+		print_vec4(mesh_actor.joints[i].rotation.raw);
 		printf("\n\t\tChildren \t (%li) :",mesh_actor.joints[i].children_count);
 		printf("[");
 		for(size_t j = 0; j < mesh_actor.joints[i].children_count;j++){
@@ -270,16 +218,16 @@ joint load_joint(cgltf_data* data, cgltf_node* jnode){
 		j.name = strdup(jnode->name);
 
 	if(jnode->has_translation){
-		memcpy(j.translation,jnode->translation,sizeof(float)*4);
+		memcpy(j.translation,jnode->translation,sizeof(float)*3);
 	}else{
-		memset(j.translation,0,sizeof(float)*4);
+		memset(j.translation,0,sizeof(float)*3);
 	}
 
 	if(jnode->has_rotation){
-		memcpy(j.rotation,jnode->rotation,sizeof(float)*4);
+		memcpy(j.rotation.raw,jnode->rotation,sizeof(float)*4);
 	}else{
-		memset(j.rotation,0,sizeof(float)*3);
-		j.rotation[3] = 1;
+		memset(j.rotation.raw,0,sizeof(float)*3);
+		j.rotation.raw[3] = 1;
 	}
 
 	j.index = jnode - data->nodes;
@@ -290,6 +238,7 @@ joint load_joint(cgltf_data* data, cgltf_node* jnode){
 	}
 	return j;
 }
+
 void load_ibm(cgltf_skin* skin ,mesh_actor* mesh){
 	cgltf_accessor *accessor = skin->inverse_bind_matrices;
 	cgltf_buffer_view* buf_view = accessor->buffer_view;
@@ -301,7 +250,7 @@ void load_ibm(cgltf_skin* skin ,mesh_actor* mesh){
 	void* att_buf = buf_view->buffer->data + buf_view->offset + accessor->offset;
 	size_t att_size = buf_view->size;
 	for(size_t k = 0; k < accessor->count; k++){
-		memcpy(mesh->joints[k].inverseBindMatrice ,att_buf,sizeof(float)*16);
+		memcpy(mesh->joints[k].inverseBindMatrice.raw ,att_buf,sizeof(float)*16);
 		print_mat4_ptr((float*)att_buf);
 		att_buf = (void*) ((char*)att_buf + accessor->stride);
 	}
@@ -349,13 +298,13 @@ sampler load_sampler(cgltf_animation_sampler* gsamp){
 	sampler.interpolation = (interpolation)gsamp->interpolation;
 	sampler.keyframes = load_accessor(gsamp->input);
 	sampler.data = load_accessor(gsamp->output);
-	sampler.element_size = getBytesPerElement(gsamp->output) * gsamp->output->count;
+	sampler.element_size = getBytesPerElement(gsamp->output);
 
-////for(int i =0; i < sampler.keyframes.size / 4; i++){
-////	printf("\nKeyframe %i at time: %f",i,((float*)sampler.keyframes.data)[i]);
-////	printf("\tRotation: ( %f, %f, %f, %f) ",((float*)sampler.data.data)[4*i],((float*)sampler.data.data)[4*i + 1],((float*)sampler.data.data)[4*i + 2],((float*)sampler.data.data)[4*i +3]);
-////}
-///
+//for(int i =0; i < sampler.keyframes.size / 4; i++){
+//	printf("\nKeyframe %i at time: %f",i,((float*)sampler.keyframes.data)[i]);
+//	printf("\tRotation: ( %f, %f, %f, %f) ",((float*)sampler.data.data)[4*i],((float*)sampler.data.data)[4*i + 1],((float*)sampler.data.data)[4*i + 2],((float*)sampler.data.data)[4*i +3]);
+//}
+
 	return sampler;
 }
 
@@ -380,7 +329,7 @@ void load_animations(cgltf_data* data,mesh_actor* mesh){
 						break;
 					}
 					if(animation.channels[c].property == prop_rotation){
-						animation.channels[c].data_ptr = mesh->joints[j].rotation;
+						animation.channels[c].data_ptr = mesh->joints[j].rotation.raw;
 						break;
 					}
 				}
@@ -481,17 +430,19 @@ void calc_joint_matrices(float* matrices,mesh_actor mesh_actor){
 		// calculate local transform
 		mat4 m;
 		glm_translate_make(m,j->translation);
-		mat4 rotated;
-		glm_quat_rotate(m,j->rotation,rotated);
-		mat4 matmul;
 
-		//glm_mat4_mul(rotated,&(j->inverseBindMatrice[0][0]),m);
+		mat4 rotated;
+		glm_quat_rotate(m,j->rotation.raw,rotated);
+		mat4s matmul;
+	 	glm_mat4_mul(rotated,j->inverseBindMatrice.raw,m);
+		memcpy(ptr,m,sizeof(float)*16);
 		//mat_mul(ptr,matrix,&(j->inverseBindMatrice[0][0]));
-		// printf("\nFinal matrix transform");
-		// print_mat4_ptr(ptr);
+		//printf("\nFinal matrix transform for joint %i",i);
+		//print_mat4(m);
 		// no need to transform children! this is just skinning !
 	ptr += 16;}
 	
+	//fflush(stdout);
 }
 
 int get_previous_index(float currentTime,buffer buffer){
@@ -541,29 +492,20 @@ int main()
 		actorShader = create_program(vertexShader,fragmentShader);
 	}
 
-	// load primitives for env model into memory
-	primitive_env primitives_env[MAX_PRIMITIVES];
-	size_t primitive_count_env = load_model_env("/mnt/Windows/Data/Models/sponza/sponza_bckup.gltf",primitives_env,0);
-	//size_t primitive_count_env = load_model_env("models/simple_skin.gltf",primitives_env,0);
-	//printf("\nPrimitives_env count %li",primitive_count_env);
 
 	// load primitives for actors into mem
-	// primitive_actor primitives_actor[MAX_PRIMITIVES];
-	/*
 	mesh_actor* mesh_actors = malloc(sizeof(mesh_actor)*MAX_MESHES_PER_FILE);
 	size_t meshes_count = load_model_actor("models/simple_skin.gltf",mesh_actors,0);
 	printf("\nNo. of meshes: %li",meshes_count);
-	*/
-
-	unsigned int env_vao =  upload_multiple_primitive_env(primitives_env,primitive_count_env);
-
-	//drawable_mesh mesh = upload_single_primitive_actor(mesh_actors[0].primitives[0]);
+	// upload primitives
+	drawable_mesh d = upload_single_primitive_actor(mesh_actors[0].primitives[0]);
 
     // uncomment this call to draw in wireframe polygons.
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-	//float* joint_matrices = malloc(sizeof(float)*mesh_actors[0].joints_count*16);
+	float* joint_matrices = malloc(sizeof(float)*mesh_actors[0].joints_count*16);
 	
+	calc_joint_matrices(joint_matrices,mesh_actors[0]);
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -576,7 +518,8 @@ int main()
 		}
 		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
 		{
-		//	mesh_actors[0].animations[0].started = glfwGetTime();
+			mesh_actors[0].animations[0].started = glfwGetTime();
+			//printf("\n");
 		}
 			
         // render
@@ -584,18 +527,12 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-		//draw envs
-
-		//draw_single_primitive_env(environmentShader,mesh);
-		draw_multiple_primitive_env(environmentShader,env_vao, primitives_env,primitive_count_env);
-
 		// animate - aka change the joint orientations
-		/*
 		{
-			if(mesh_actors[0].animations[0].started == -1){}else{ 
+			if(mesh_actors[0].animations[0].started > 0 ){ 
 				for(int i =0; i < mesh_actors[0].animations[0].channels_count; i++){
 					channel* channel = &(mesh_actors[0].animations[0].channels[i]);
-					sampler samp = mesh_actors[0].animations[0].channels[i].sampler;
+					sampler samp = channel->sampler;
 					switch(samp.interpolation){
 						case STEP:
 							{
@@ -608,28 +545,49 @@ int main()
 							{
 								float currentTime = glfwGetTime() - mesh_actors[0].animations[0].started;
 								int previousTimeIndex = get_previous_index(currentTime,samp.keyframes);
-								//memcpy(channel->data_ptr,&samp.data.data[samp.keyframse* 
 								float* keyframes =  samp.keyframes.data;
-								int interpolationValue = (currentTime - keyframes[previousTimeIndex]) / (keyframes[previousTimeIndex+1] - keyframes[previousTimeIndex]);
-								//lerp_vec(
+								float interpolationValue = (currentTime - keyframes[previousTimeIndex]) / (keyframes[previousTimeIndex+1] - keyframes[previousTimeIndex]);
+								switch(channel->property){
+									case prop_weights:
+									case prop_rotation:
+										{
+											versors p,n;
+											memcpy(p.raw, ((char*)samp.data.data + samp.element_size*previousTimeIndex),samp.element_size);
+											memcpy(n.raw, ((char*)samp.data.data + samp.element_size*(previousTimeIndex+1)),samp.element_size);
+											versors slerped_value = glms_quat_slerp(p,n,interpolationValue);
+											memcpy(channel->data_ptr,slerped_value.raw,sizeof(versors));
+										}
+										break;
+									case prop_scale:
+									case prop_translation:
+										{
+											vec3s p,n;
+											memcpy(p.raw, ((char*)samp.data.data + samp.element_size*previousTimeIndex),samp.element_size);
+											memcpy(n.raw, ((char*)samp.data.data + samp.element_size*(previousTimeIndex+1)),samp.element_size);
+											vec3s lerped_value = glms_vec3_lerp(p,n,interpolationValue);
+											memcpy(channel->data_ptr,lerped_value.raw,sizeof(vec3s));
+										}
+										break;
+								}
 							}
 							break;
 						case CUBICSPLINE:
+							{
+								//todo
+							}
 							break;
 					}
 				}
 			}
 		}
+
 		// calc joint matrices from joint orientations and upload to shader
 		calc_joint_matrices(joint_matrices,mesh_actors[0]);
 		int jointmat_loc = glGetUniformLocation(actorShader, "u_jointMat");
 		glUseProgram(actorShader);
 		glUniformMatrix4fv(jointmat_loc,mesh_actors[0].joints_count,GL_FALSE,joint_matrices);	
 		// draw actors
-		draw_single_primitive_env(actorShader,mesh);
-		*/
-		
-		
+		draw_single_primitive_env(actorShader,d);
         // glBindVertexArray(0); // no need to unbind it every time 
  
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)

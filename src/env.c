@@ -129,8 +129,6 @@ size_t load_model_env(char* model_path, primitive_env* primitives, size_t primit
  }
 
 drawable_mesh upload_single_primitive_env(primitive_env p){
-	// upload single primtive into ogl buffer
-	// load model primitive into buffers and return ids
 	unsigned int ebo,vbo;
 	drawable_mesh m = {0};
 	m.indices_count = p.indices_count;
