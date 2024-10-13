@@ -128,9 +128,9 @@ size_t load_model_env(char* model_path, primitive_env* primitives, size_t primit
 	return primitive_index;
  }
 
-drawable_mesh upload_single_primitive_env(primitive_env p){
+drawable_prim upload_single_primitive_env(primitive_env p){
 	unsigned int ebo,vbo;
-	drawable_mesh m = {0};
+	drawable_prim m = {0};
 	m.indices_count = p.indices_count;
 	glGenVertexArrays(1,&m.vao);
 	glGenBuffers(1, &vbo);
@@ -149,7 +149,7 @@ drawable_mesh upload_single_primitive_env(primitive_env p){
 	return m;
 }
 
-void draw_single_primitive_env(unsigned int shaderProgram,drawable_mesh d){
+void draw_single_primitive_env(unsigned int shaderProgram,drawable_prim d){
 	glUseProgram(shaderProgram);
 	glBindVertexArray(d.vao);
 	glDrawElements(GL_TRIANGLES, d.indices_count,GL_UNSIGNED_SHORT, 0);

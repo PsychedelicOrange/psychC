@@ -30,8 +30,8 @@ typedef struct primitive_env{
 // Load model from file to memory. 
 size_t load_model_env(char* model_path, primitive_env* primitives, size_t primitive_index);
 
-drawable_mesh upload_single_primitive_env(primitive_env p);
-void draw_single_primitive_env(unsigned int shaderProgram,drawable_mesh d);
+drawable_prim upload_single_primitive_env(primitive_env p);
+void draw_single_primitive_env(unsigned int shaderProgram,drawable_prim d);
 
 // batches multiple primitives vertex data into one buffer
 unsigned int upload_multiple_primitive_env(primitive_env* primitives, size_t primitive_count);

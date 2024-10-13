@@ -21,16 +21,20 @@ typedef struct primitive_actor{
 	size_t indices_count;
 }primitive_actor;
 
+typedef struct drawable_primitive_actor{
+	unsigned int shaderProgram;
+	unsigned int vao;
+	size_t indices_count;
+}drawable_primitive_actor;
+
 typedef struct joint{
 	char* name;
-	int index;
+	int gltf_index;
 	int children[10];
 	size_t children_count;
-	mat4s inverseBindMatrice;
 	float translation[3];
 	vec4s rotation;
 }joint;
-
 
 typedef enum animation_property{
 	prop_translation,
@@ -64,11 +68,40 @@ typedef struct animation{
 	float started ;
 }animation;
 
+typedef struct skin{
+	mat4s inverseBindMatrices[100];
+	joint* joint_refs[100];
+	size_t joints_count;
+}skin;
+
 typedef struct mesh_actor{
 	primitive_actor* primitives;
 	size_t primitives_count ;
-	joint* joints;
-	size_t joints_count ;
-	animation animations[10];
-	size_t animations_count ;
+	skin* skin_ref;
 }mesh_actor;
+
+typedef struct model_actor{
+	mesh_actor* meshes;
+	size_t meshes_count;
+	hashmap_int joints;
+	skin* skins;
+	size_t skins_count;
+	animation animations[10];
+	size_t animations_count;
+}model_actor;
+
+typedef struct drawable_mesh{
+	skin* skin_ref;
+	drawable_prim* prims;
+	size_t prims_count;
+	// used to store calculated jointMatrices from joints to upload to shader
+	float* jointMatricesData;
+}drawable_mesh;
+
+typedef struct drawable_model{
+	drawable_mesh* meshes;
+	size_t meshes_count;
+	animation animations[10];
+	size_t animations_count;
+}drawable_model;
+

@@ -6,7 +6,7 @@ unsigned int compile_shader(const char * shaderCode, int shaderType){
 	glShaderSource(shader, 1, &shaderCode, 0);
 	glCompileShader(shader);
 	// check for shader compile errors
-	int success;
+	int success = 0;
 	char infoLog[512];
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 	if (!success)
@@ -24,7 +24,7 @@ unsigned int create_program(unsigned int vertexShader, unsigned int fragmentShad
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
     // check for linking errors
-	int success;
+	int success = 0;
 	char infoLog[512];
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if (!success) {
