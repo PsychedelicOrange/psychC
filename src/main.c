@@ -13,11 +13,15 @@
 #include "shader.h"
 #include "env.h"
 #include "util.h"
-// --- -- -- - -- - - Defines move them to constants lateer -- -- -- - -- 
-#define MAX_MESHES_PER_FILE 100
+#include "camera.h"
+// --- -- -- - -- - - Defines -- -- -- - -- -- -- -- -- -- 
+const vec3s up = {{0,1,0}};
+float lastX,lastY;
+camera cam;
 
 // -- -- -- -- -- -- Function declare -- -- -- -- -- --- --
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 
 // -- -- -- -- -- -- Engine Helpers Functions -- -- -- -- -- --- --
 void crash_game(char* msg){
@@ -32,7 +36,7 @@ void print_vec3(float* vec){
 	printf("(%f,%f,%f)",vec[0],vec[1],vec[2]);
 }
 void print_vec4(float* vec){
-	printf("\r(%f,%f,%f,%f)",vec[0],vec[1],vec[2],vec[3]);
+	printf("(%f,%f,%f,%f)",vec[0],vec[1],vec[2],vec[3]);
 }
 void print_mat4_ptr(float* mat){
 	printf("\n[\n");
@@ -99,23 +103,13 @@ void print_sampler(sampler samp){
 	printf("\nsamp.element: %li",samp.element_size);
 	printf("\nsamp.interpolation: %i",samp.interpolation);
 }
-void print_skin(skin* skin){
-	/*
-	for(size_t i  = 0 ; i < mesh_actor.joints_count;i++){
-		printf("\n\tJoint \t %li:",i);
-		printf("\n\t\tIndex \t %i:",mesh_actor.joints[i].index);
+void print_joint(joint* j){
+		printf("\n\tJoint \t :");
+		printf("\n\t\tIndex \t %i:",j->gltf_index);
 		printf("\n\t\tTranslation \t :");
-		print_vec3(mesh_actor.skin_ref->joint_refs[i]->translation);
+		print_vec3(j->translation);
 		printf("\n\t\tRotation \t :");
-		print_vec4(mesh_actor.joints[i].rotation.raw);
-		printf("\n\t\tChildren \t (%li) :",mesh_actor.joints[i].children_count);
-		printf("[");
-		for(size_t j = 0; j < mesh_actor.joints[i].children_count;j++){
-			printf("%i,",mesh_actor.joints[i].children[j]);
-		}
-		printf("]");
-	}
-	*/
+		print_vec4(j->rotation.raw);
 }
 void print_mesh_actor(mesh_actor mesh_actor){
 	printf("\n Mesh:");
@@ -242,14 +236,18 @@ joint* load_joint(cgltf_data* data, cgltf_node* jnode){
 		j->rotation.raw[3] = 1;
 	}
 
+	j->parent = NULL;
 	j->gltf_index = jnode - data->nodes;
+	/*
 	j->children_count = jnode->children_count;
 	for(int i = 0; i < j->children_count; i++){
 		if(jnode == jnode->children[i]) assert(false);
 		j->children[i] = jnode->children[i] - data->nodes;
 	}
+	*/
 	return j;
 }
+
 size_t getBytesPerElement(cgltf_accessor* acc){
 	cgltf_component_type ctype = acc->component_type;
 	cgltf_type type = acc->type;
@@ -257,6 +255,7 @@ size_t getBytesPerElement(cgltf_accessor* acc){
 	int cgltf_type_to_count[]= {-1,1,2,3,4,4,9,16};	
 	return cgltf_ctype_to_bytes[ctype]*type;
 }
+
 buffer load_accessor(cgltf_accessor* acc){
 	buffer buf;
 	cgltf_buffer_view* buf_view = acc->buffer_view;
@@ -280,8 +279,8 @@ buffer load_accessor(cgltf_accessor* acc){
 void load_ibm(cgltf_skin* cskin ,skin* skin){
 	cgltf_accessor *accessor = cskin->inverse_bind_matrices;
 	cgltf_buffer_view* buf_view = accessor->buffer_view;
-	printf("\nIBM accessor:");
-	print_accessor(accessor);
+	//printf("\nIBM accessor:");
+	//print_accessor(accessor);
 	assert(accessor->component_type == cgltf_component_type_r_32f);
 	assert(accessor->type == cgltf_type_mat4);
 	// try this ig ?
@@ -324,17 +323,14 @@ void load_animations(cgltf_data* data,model_actor* model){
 			animation.channels[c].property = channel.target_path - 1;
 			animation.channels[c].sampler = load_sampler(channel.sampler);
 			// store address of animated property in the data_ptr for easy update
-			hashmap_int_entry* entry = hashmap_linear_search_int(&model->joints,channel.target_node - data->nodes);
-			if(!entry){
-				printf("\nreturned NULL");
-				fflush(stdout);
-			}
+			joint* joint = hashmap_get(&model->joints,channel.target_node - data->nodes);
+			assert(joint);
 			if(animation.channels[c].property == prop_translation){
-				animation.channels[c].data_ptr = ((joint*)entry->value)->translation;
+				animation.channels[c].data_ptr = joint->translation;
 			}else if(animation.channels[c].property == prop_rotation){
-				animation.channels[c].data_ptr = ((joint*)entry->value)->rotation.raw;
+				animation.channels[c].data_ptr = joint->rotation.raw;
 			}else if(animation.channels[c].property == prop_scale){
-				printf("\nIgnoring scale animation for bones.");
+				//printf("\nIgnoring scale animation for bones.");
 			}else{
 				assert(0);
 			}
@@ -345,7 +341,49 @@ void load_animations(cgltf_data* data,model_actor* model){
 		assert(model->animations[0].channels[k].sampler.element_size != 0);
 	}
 }
-
+void topo_sort(cgltf_data* data, cgltf_node* joint, int* visited, int* vsize, int* topo_order, int* index){
+	for(int i = 0; i < joint->children_count;i++){
+		int isvisited= 0;
+		for(int v = 0; v < *vsize; v++){
+			if(visited[v] == joint->children[i] - data->nodes){
+				isvisited = 1;
+			}
+		}
+		if(isvisited) continue;
+		visited[(*vsize)++] = joint->children[i]- data->nodes;
+		topo_sort(data,joint->children[i],visited,vsize,topo_order,index);
+	}
+	topo_order[(*index)++] = joint - data->nodes;
+}
+buffer calc_joint_topo_order(cgltf_data* data,cgltf_skin skin){
+	int jc = skin.joints_count;
+	buffer topo_order;
+	topo_order.data = malloc(sizeof(int)*jc); // stack
+	topo_order.size = sizeof(int)*jc;
+	int* topo_order_ar = (int*)topo_order.data;
+	int index = 0;
+	int* visited = malloc(sizeof(int)*jc); 
+	int vindex = 0;
+	memset(visited,-1,sizeof(int)*jc);
+	for(int i =0; i < jc;i++){
+		int isvisited= 0;
+		for(int v = 0; v < vindex; v++){
+			if(visited[v] == skin.joints[i] - data->nodes){
+				isvisited = 1;
+			}
+		}
+		if(isvisited) continue;
+		visited[vindex++] = skin.joints[i] - data->nodes;
+		topo_sort(data,skin.joints[i],visited,&vindex,topo_order_ar,&index);
+	}
+	printf("\n Topological order for joint: \n");
+	for(int i = 0; i < jc;i ++){
+		printf("%i, ",topo_order_ar[i]);
+	}
+	fflush(stdout);
+	free(visited);
+	return topo_order;
+}
 model_actor load_model_actor(char* model_path){
 	model_actor model;
 	cgltf_options options = {0}; 
@@ -380,21 +418,42 @@ model_actor load_model_actor(char* model_path){
 			model.skins_count = data->skins_count;
 			model.skins = malloc(sizeof(skin) * model.skins_count);
 			for(int i = 0;i < model.skins_count; i++){
+				model.skins[i].topo_order = calc_joint_topo_order(data,data->skins[i]);
 				load_ibm(&data->skins[i],&model.skins[i]);
 				model.skins[i].joints_count = data->skins[i].joints_count;
 				assert(model.skins[i].joints_count < 100);
 				for(int j =0; j <model.skins[i].joints_count;j++){
-					int key = (data->skins[i].joints[j]) - (data->nodes);
-					hashmap_int_entry* joint_entry = hashmap_linear_search_int(&model.joints,key);
-					if(joint_entry == NULL){
+					int key = data->skins[i].joints[j] - data->nodes; 
+					joint* search = hashmap_get(&model.joints,key);
+					if(search == NULL){
 						joint* joint = load_joint(data,data->skins[i].joints[j]);
-						hashmap_add_int(&model.joints,key,joint);
+						hashmap_put(&model.joints,key,joint);
 						model.skins[i].joint_refs[j] = joint;
 					}
 				}
+				// populate joint->parent for all joints
+				{
+					for(int j = 0; j < model.skins[i].joints_count;j++){
+						cgltf_node* cjo= data->skins[i].joints[j];
+						joint* parent = hashmap_get(&model.joints, cjo - data->nodes);
+						for(int c = 0; c < cjo->children_count; c++){
+							joint* child = hashmap_get(&model.joints, cjo->children[c] - data->nodes);
+							if(!child)continue;
+							child->parent = parent; 
+						}
+					}
+				}
+				// debug joints
+				{
+		////		printf("\nDebug joints:");
+		////		for(int j =0; j < model.joints.size;j++){
+		////			printf("\n key: %i", model.joints.map[j].key);
+		////			joint* joint = model.joints.map[j].value;
+		////			print_joint(joint);
+		////		}
+				}
 			}
 		}
-
 		// populate refs to skins in meshes
 		{ 
 			size_t nodes_count = data->nodes_count;
@@ -454,28 +513,63 @@ drawable_prim upload_single_primitive_actor(primitive_actor p){
 	return m;
 }
 
-void calc_joint_matrices(float* matrices,skin* skin){
-		size_t jc = skin->joints_count;
-		float* ptr = matrices;
-		for(int i =0; i < jc; i++){
-			joint* j = skin->joint_refs[i];
-			// calculate local transform
+void calc_joint_matrices(float* matrices,hashmap_int* joints,drawable_mesh* dmesh){
+	skin* skin = dmesh->skin_ref;
+	size_t jc = skin->joints_count;
+
+///	for(int j =0; j < joints->size;j++){
+///		printf("\n key: %i", joints->map[j].key);
+///		joint* joint = joints->map[j].value;
+///		print_joint(joint);
+///	}
+
+	// calc global transforms for each joint (in topo order so its simple)
+	int* order = ((int*)skin->topo_order.data);
+	for (int i = (skin->topo_order.size/sizeof(int)) - 1; i >= 0 ; i--){
+		joint* j = hashmap_get(joints,order[i]);
+		if(!j->parent){
 			mat4 m;
 			glm_translate_make(m,j->translation);
-
-			mat4 rotated;
-			glm_quat_rotate(m,j->rotation.raw,rotated);
-			mat4s matmul;
-			glm_mat4_mul(rotated,skin->inverseBindMatrices[i].raw,m);
-			memcpy(ptr,m,sizeof(float)*16);
-			//mat_mul(ptr,matrix,&(j->inverseBindMatrice[0][0]));
-			//printf("\nFinal matrix transform for joint %i",i);
-			//print_mat4(m);
-			//no need to transform children! this is forward kinematices !
-			ptr += 16;
+			glm_quat_rotate(m,j->rotation.raw,j->transform.raw);
+			//printf("\nLocal Transforms:# %i",j->gltf_index);
+		//	print_mat4(j->transform.raw);
+			fflush(stdout);
+		}else{
+				mat4 m;
+				glm_translate_make(m,j->translation);
+				mat4 rotated;
+				glm_quat_rotate(m,j->rotation.raw,rotated);
+				glm_mat4_mul(j->parent->transform.raw,rotated,j->transform.raw);
+			//	printf("\nGlobalTransform:# %i",j->gltf_index);
+			//	print_mat4(j->transform.raw);
+				fflush(stdout);
+			}
 		}
+	// print global_transform
+	{
+	////printf("\nGlobal Transforms: *");
+	////for(int i =0; i < jc; i++){
+	////	joint* j = skin->joint_refs[i];
+	////	print_mat4(j->transform.raw);
+	////}
+	}
+
+	float* ptr = matrices;
+	for(int i =0; i < jc; i++){
+		joint* j = skin->joint_refs[i];
+		// calculate joint matrices 
+		// globalTransformOfSelf = (globalTransformOfParent * localTransformOfSelf)
+		mat4s m = GLMS_MAT4_IDENTITY_INIT;
+		glm_mat4_mul(j->transform.raw,skin->inverseBindMatrices[i].raw,m.raw);
+		memcpy(ptr,m.raw,sizeof(float)*16);
+		//mat_mul(ptr,matrix,&(j->inverseBindMatrice[0][0]));
+		//printf("\nFinal matrix transform for joint %i",i);
+		//print_mat4(m);
+		//no need to transform children! this is forward kinematices !
+		ptr += 16;
 	}
 	//fflush(stdout);
+}
 
 int get_previous_index(float currentTime,buffer buffer){
 	// binary search for fun
@@ -552,6 +646,7 @@ void animate(drawable_model* model){
 					case CUBICSPLINE:
 						{
 							//todo
+							assert(0);
 						}
 						break;
 				}
@@ -564,6 +659,7 @@ drawable_model upload_model_actor(model_actor* model){
 	drawable_model dmodel;
 	dmodel.animations_count = model->animations_count;
 	memcpy(dmodel.animations,model->animations,sizeof(animation)*model->animations_count);
+	dmodel.joints = &model->joints;
 	dmodel.meshes = malloc(sizeof(drawable_mesh)*(model->meshes_count));
 	dmodel.meshes_count = model->meshes_count;
 	for(int i = 0 ; i < model->meshes_count; i++){
@@ -586,7 +682,7 @@ void draw_model(drawable_model* dmodel,unsigned int shaderProgram){
 		// TODO combine vbos for all vbos in future ( check materials flow ?)
 		drawable_mesh* mesh_actor = &dmodel->meshes[i];
 		if(mesh_actor->skin_ref != NULL){
-			calc_joint_matrices(mesh_actor->jointMatricesData,mesh_actor->skin_ref);
+			calc_joint_matrices(mesh_actor->jointMatricesData,(dmodel->joints),mesh_actor);
 			int jointmat_loc = glGetUniformLocation(shaderProgram, "u_jointMat");
 			glUseProgram(shaderProgram);
 			glUniformMatrix4fv(jointmat_loc,mesh_actor->skin_ref->joints_count,GL_FALSE,mesh_actor->jointMatricesData);	
@@ -597,11 +693,23 @@ void draw_model(drawable_model* dmodel,unsigned int shaderProgram){
 	}
 }
 
-int main()
+int main(int argc, char *argv[])
 {
 
 	init_glfw();
 	GLFWwindow* window = (GLFWwindow*)create_glfw_window(800,600);
+	lastX = 800.0f/2;
+	lastY = 600.0f/2;
+	// callbacks and settings on window
+	if (glfwRawMouseMotionSupported())
+		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+	glfwSetCursorPosCallback(window, cursor_position_callback);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	//glfwSetKeyCallback(window,key_callback);
+
+
+	cam = init_camera();
+
 	init_glad();
 
 	unsigned int environmentShader;
@@ -614,6 +722,7 @@ int main()
 		unsigned int fragmentShader = compile_shader(fragmentShaderCode, GL_FRAGMENT_SHADER);
 		environmentShader = create_program(vertexShader,fragmentShader);
 	}
+
 	unsigned int actorShader;
 	{
 		char vertexShaderCode[FILE_SIZE_SHADER_MAX];
@@ -625,8 +734,15 @@ int main()
 		actorShader = create_program(vertexShader,fragmentShader);
 	}
 
+	{
+		mat4s projection = glms_perspective(glm_rad(45.0f), (float)800 / (float)600, 0.1f, 10000.0f);
+		mat4s cube_transform = GLMS_MAT4_IDENTITY_INIT;
+		setUniformMat4(actorShader,projection,"projection");
+		setUniformMat4(actorShader,cube_transform,"model");
+	}
+
 	// load primitives for actors into mem
-	model_actor model = load_model_actor("models/simple_skin.gltf");
+	model_actor model = load_model_actor(argv[1]);
 
 	for(int i = 0; i < model.animations[0].channels_count;i++){
 		if(model.animations[0].channels[i].sampler.element_size == 0){
@@ -657,6 +773,22 @@ int main()
 		{
 			dmodel.animations[0].started = glfwGetTime();
 		}
+		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_LEFT_SHIFT)){
+			cam.position.y -= 0.1;
+		}
+		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_W)){
+			cam.position.z -= 0.1;
+		}
+		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_A)){
+			cam.position.x -= 0.1;
+		}
+		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_S)){
+			cam.position.z += 0.1;
+		}
+		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_D)){
+			cam.position.x += 0.1;
+		}
+		update_first_person_camera(&cam);
 			
         // render
         // ------
@@ -665,6 +797,10 @@ int main()
 
 		// draw actors
 		animate(&dmodel);
+		// set global shader variables
+		glm_look(cam.position.raw,cam.front.raw,cam.up.raw,cam.lookAt.raw);
+		setUniformMat4(actorShader,cam.lookAt,"view");
+
 		draw_model(&dmodel,actorShader);
 		//draw_single_primitive_env(actorShader,d);
         // glBindVertexArray(0); // no need to unbind it every time 
@@ -695,4 +831,15 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+{
+	float xoffset = xpos - lastX;
+    float yoffset = ypos - lastY ; // reversed since y-coordinates go from bottom to top
+	lastX = xpos;
+	lastY = ypos;
 
+	xoffset *=  0.1;
+	yoffset *=  0.1;
+
+	update_camera_mouse_callback(&cam,xoffset,yoffset);
+}

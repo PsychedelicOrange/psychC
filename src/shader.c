@@ -36,3 +36,8 @@ unsigned int create_program(unsigned int vertexShader, unsigned int fragmentShad
     glDeleteShader(fragmentShader);
 	return shaderProgram;
 }
+void setUniformMat4(unsigned int shaderProgram,mat4s matrix, char* location){
+	glUseProgram(shaderProgram);
+	int loc = glGetUniformLocation(shaderProgram,location);
+	glUniformMatrix4fv(loc,1,GL_FALSE,&matrix.col[0].raw[0]);	
+}

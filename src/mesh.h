@@ -30,10 +30,12 @@ typedef struct drawable_primitive_actor{
 typedef struct joint{
 	char* name;
 	int gltf_index;
-	int children[10];
-	size_t children_count;
+	struct joint* parent;
+////int children[10];
+////size_t children_count;
 	float translation[3];
 	vec4s rotation;
+	mat4s transform;
 }joint;
 
 typedef enum animation_property{
@@ -72,6 +74,7 @@ typedef struct skin{
 	mat4s inverseBindMatrices[100];
 	joint* joint_refs[100];
 	size_t joints_count;
+	buffer topo_order;
 }skin;
 
 typedef struct mesh_actor{
@@ -101,6 +104,7 @@ typedef struct drawable_mesh{
 typedef struct drawable_model{
 	drawable_mesh* meshes;
 	size_t meshes_count;
+	hashmap_int* joints;
 	animation animations[10];
 	size_t animations_count;
 }drawable_model;

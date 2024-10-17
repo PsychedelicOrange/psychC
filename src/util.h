@@ -24,8 +24,10 @@ typedef struct hashmap_int{
 	size_t size;
 } hashmap_int;
 
-void hashmap_add_int(hashmap_int *hash, int key, void *value);
-
-hashmap_int_entry *hashmap_linear_search_int(hashmap_int *hash, int key);
+/* Puts value in key if key exists and returns 1; if key doesn't exists adds it and returns 0 */
+int hashmap_reput(hashmap_int *hash, int key, void *value);
+/* puts key value in map if doesnt exist and returns 0; if key exists doesnt do anything and returns 1; */
+int hashmap_put(hashmap_int *hash, int key, void *value);
+void* hashmap_get(hashmap_int* hash, int n);
 
 #endif
