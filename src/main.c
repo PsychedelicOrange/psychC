@@ -445,12 +445,12 @@ model_actor load_model_actor(char* model_path){
 				}
 				// debug joints
 				{
-		////		printf("\nDebug joints:");
-		////		for(int j =0; j < model.joints.size;j++){
-		////			printf("\n key: %i", model.joints.map[j].key);
-		////			joint* joint = model.joints.map[j].value;
-		////			print_joint(joint);
-		////		}
+				printf("\nDebug joints:");
+				for(int j =0; j < model.joints.size;j++){
+					printf("\n key: %i", model.joints.map[j].key);
+					joint* joint = model.joints.map[j].value;
+					print_joint(joint);
+				}
 				}
 			}
 		}
@@ -513,15 +513,8 @@ drawable_prim upload_single_primitive_actor(primitive_actor p){
 	return m;
 }
 
-void calc_joint_matrices(float* matrices,hashmap_int* joints,drawable_mesh* dmesh){
-	skin* skin = dmesh->skin_ref;
+void calc_global_transform_joint(hashmap_int* joints,skin* skin){
 	size_t jc = skin->joints_count;
-
-///	for(int j =0; j < joints->size;j++){
-///		printf("\n key: %i", joints->map[j].key);
-///		joint* joint = joints->map[j].value;
-///		print_joint(joint);
-///	}
 
 	// calc global transforms for each joint (in topo order so its simple)
 	int* order = ((int*)skin->topo_order.data);
@@ -531,44 +524,28 @@ void calc_joint_matrices(float* matrices,hashmap_int* joints,drawable_mesh* dmes
 			mat4 m;
 			glm_translate_make(m,j->translation);
 			glm_quat_rotate(m,j->rotation.raw,j->transform.raw);
-			//printf("\nLocal Transforms:# %i",j->gltf_index);
-		//	print_mat4(j->transform.raw);
-			fflush(stdout);
 		}else{
-				mat4 m;
-				glm_translate_make(m,j->translation);
-				mat4 rotated;
-				glm_quat_rotate(m,j->rotation.raw,rotated);
-				glm_mat4_mul(j->parent->transform.raw,rotated,j->transform.raw);
-			//	printf("\nGlobalTransform:# %i",j->gltf_index);
-			//	print_mat4(j->transform.raw);
-				fflush(stdout);
-			}
+			// globalTransformOfSelf = (globalTransformOfParent * localTransformOfSelf)
+			mat4 m;
+			glm_translate_make(m,j->translation);
+			mat4 rotated;
+			glm_quat_rotate(m,j->rotation.raw,rotated);
+			glm_mat4_mul(j->parent->transform.raw,rotated,j->transform.raw);
 		}
-	// print global_transform
-	{
-	////printf("\nGlobal Transforms: *");
-	////for(int i =0; i < jc; i++){
-	////	joint* j = skin->joint_refs[i];
-	////	print_mat4(j->transform.raw);
-	////}
 	}
 
+}
+
+void calc_joint_matrices(float* matrices, skin* skin){
+	size_t jc = skin->joints_count;
 	float* ptr = matrices;
 	for(int i =0; i < jc; i++){
 		joint* j = skin->joint_refs[i];
-		// calculate joint matrices 
-		// globalTransformOfSelf = (globalTransformOfParent * localTransformOfSelf)
 		mat4s m = GLMS_MAT4_IDENTITY_INIT;
 		glm_mat4_mul(j->transform.raw,skin->inverseBindMatrices[i].raw,m.raw);
 		memcpy(ptr,m.raw,sizeof(float)*16);
-		//mat_mul(ptr,matrix,&(j->inverseBindMatrice[0][0]));
-		//printf("\nFinal matrix transform for joint %i",i);
-		//print_mat4(m);
-		//no need to transform children! this is forward kinematices !
 		ptr += 16;
 	}
-	//fflush(stdout);
 }
 
 int get_previous_index(float currentTime,buffer buffer){
@@ -603,18 +580,24 @@ void animate(drawable_model* model){
 						{
 							float currentTime = glfwGetTime() - model->animations[j].started;
 							int previousTimeIndex = get_previous_index(currentTime,samp.keyframes);
-							if(currentTime > ((float *)samp.keyframes.data)[samp.keyframes.size/sizeof(float)-1]){
+							float endTime = ((float *)samp.keyframes.data)[samp.keyframes.size/sizeof(float)-1];
+							if(currentTime > endTime){
 								model->animations[j].started = -1;
+								memcpy(channel->data_ptr,&(samp.data.data[0]),samp.element_size);
+								break;
+							}else{
+								memcpy(channel->data_ptr,&(samp.data.data[samp.element_size*previousTimeIndex]),samp.element_size);
 							}
-							memcpy(channel->data_ptr,&(samp.data.data[samp.element_size*previousTimeIndex]),samp.element_size);
 						}
 						break;
 					case LINEAR:
 						{
 							float currentTime = glfwGetTime() - model->animations[j].started;
 							int previousTimeIndex = get_previous_index(currentTime,samp.keyframes);
-							if(currentTime > ((float *)samp.keyframes.data)[samp.keyframes.size/sizeof(float)-1]){
+							float endTime = ((float *)samp.keyframes.data)[samp.keyframes.size/sizeof(float)-1];
+							if(currentTime > endTime){
 								model->animations[j].started = -1;
+								previousTimeIndex = (samp.keyframes.size/sizeof(float))-2;
 							}
 							float* keyframes =  samp.keyframes.data;
 							float interpolationValue = (currentTime - keyframes[previousTimeIndex]) / (keyframes[previousTimeIndex+1] - keyframes[previousTimeIndex]);
@@ -651,6 +634,7 @@ void animate(drawable_model* model){
 						break;
 				}
 			}
+		}else{
 		}
 	}
 }
@@ -682,7 +666,9 @@ void draw_model(drawable_model* dmodel,unsigned int shaderProgram){
 		// TODO combine vbos for all vbos in future ( check materials flow ?)
 		drawable_mesh* mesh_actor = &dmodel->meshes[i];
 		if(mesh_actor->skin_ref != NULL){
-			calc_joint_matrices(mesh_actor->jointMatricesData,(dmodel->joints),mesh_actor);
+			animate(dmodel);
+			calc_global_transform_joint(dmodel->joints,mesh_actor->skin_ref);
+			calc_joint_matrices(mesh_actor->jointMatricesData,mesh_actor->skin_ref);
 			int jointmat_loc = glGetUniformLocation(shaderProgram, "u_jointMat");
 			glUseProgram(shaderProgram);
 			glUniformMatrix4fv(jointmat_loc,mesh_actor->skin_ref->joints_count,GL_FALSE,mesh_actor->jointMatricesData);	
@@ -796,7 +782,6 @@ int main(int argc, char *argv[])
         glClear(GL_COLOR_BUFFER_BIT);
 
 		// draw actors
-		animate(&dmodel);
 		// set global shader variables
 		glm_look(cam.position.raw,cam.front.raw,cam.up.raw,cam.lookAt.raw);
 		setUniformMat4(actorShader,cam.lookAt,"view");
