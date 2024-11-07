@@ -678,6 +678,31 @@ void draw_model(drawable_model* dmodel,unsigned int shaderProgram){
 		}
 	}
 }
+GLuint setup_screen_quad(void){
+	// Vertex data for the rectangle (two triangles forming a quad)
+	float vertices[] = {
+		// Positions (X, Y)
+		-1.0f,  1.0f,  // Top-left
+		-1.0f, -1.0f,  // Bottom-left
+		1.0f, -1.0f,  // Bottom-right
+
+		-1.0f,  1.0f,  // Top-left
+		1.0f, -1.0f,  // Bottom-right
+		1.0f,  1.0f   // Top-right
+	};
+	unsigned int VAO, VBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    // Position attribute
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+	return VAO;
+}
 
 int main(int argc, char *argv[])
 {
@@ -690,7 +715,7 @@ int main(int argc, char *argv[])
 	if (glfwRawMouseMotionSupported())
 		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 	glfwSetCursorPosCallback(window, cursor_position_callback);
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	//glfwSetKeyCallback(window,key_callback);
 
 
@@ -698,27 +723,9 @@ int main(int argc, char *argv[])
 
 	init_glad();
 
-	unsigned int environmentShader;
-	{
-		char vertexShaderCode[FILE_SIZE_SHADER_MAX];
-		char fragmentShaderCode[FILE_SIZE_SHADER_MAX];
-		read_string_from_disk("/home/parth/code/psychC/shaders/env.vs",vertexShaderCode);
-		read_string_from_disk("/home/parth/code/psychC/shaders/env.fs",fragmentShaderCode);
-		unsigned int vertexShader = compile_shader(vertexShaderCode, GL_VERTEX_SHADER);
-		unsigned int fragmentShader = compile_shader(fragmentShaderCode, GL_FRAGMENT_SHADER);
-		environmentShader = create_program(vertexShader,fragmentShader);
-	}
-
-	unsigned int actorShader;
-	{
-		char vertexShaderCode[FILE_SIZE_SHADER_MAX];
-		char fragmentShaderCode[FILE_SIZE_SHADER_MAX];
-		read_string_from_disk("/home/parth/code/psychC/shaders/actor.vs",vertexShaderCode);
-		read_string_from_disk("/home/parth/code/psychC/shaders/actor.fs",fragmentShaderCode);
-		unsigned int vertexShader = compile_shader(vertexShaderCode, GL_VERTEX_SHADER);
-		unsigned int fragmentShader = compile_shader(fragmentShaderCode, GL_FRAGMENT_SHADER);
-		actorShader = create_program(vertexShader,fragmentShader);
-	}
+	unsigned int environmentShader = create_shader("/home/parth/code/psychC/shaders/env.vs","/home/parth/code/psychC/shaders/env.fs");
+	unsigned int actorShader = create_shader("/home/parth/code/psychC/shaders/actor.vs","/home/parth/code/psychC/shaders/actor.fs");
+	printf("Shaders Loaded.");fflush(stdout);
 
 	{
 		mat4s projection = glms_perspective(glm_rad(45.0f), (float)800 / (float)600, 0.1f, 10000.0f);
@@ -754,10 +761,6 @@ int main(int argc, char *argv[])
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		{
 			glfwSetWindowShouldClose(window, true);
-		}
-		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-		{
-			dmodel.animations[0].started = glfwGetTime();
 		}
 		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_LEFT_SHIFT)){
 			cam.position.y -= 0.1;
