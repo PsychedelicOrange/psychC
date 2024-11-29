@@ -1,0 +1,54 @@
+#version 460 core
+out vec4 FragColor;
+
+float noise(vec3 x)
+{
+    vec3 p = floor(x);
+    vec3 f = fract(x);
+    f = f*f*(3.-2.*f);
+	
+    float n = p.x + p.y*157. + 113.*p.z;
+    
+    vec4 v1 = fract(753.5453123*sin(n + vec4(0., 1., 157., 158.)));
+    vec4 v2 = fract(753.5453123*sin(n + vec4(113., 114., 270., 271.)));
+    vec4 v3 = mix(v1, v2, f.z);
+    vec2 v4 = mix(v3.xy, v3.zw, f.y);
+    return mix(v4.x, v4.y, f.x);
+}
+
+float sphere(vec3 p, vec4 circle){
+	return length(p-circle.xyz) - (circle.w + 0.1) ;
+}
+
+float box(vec3 p, vec3 op, vec3 b){
+  vec3 q = abs(p-op) - b;
+  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+}
+
+float raymarch(vec3 ro, vec3 rd){
+	float di = 0;
+	for(int i = 0; i < 100; i++){
+		vec3 p = ro + rd * di;
+		float sp = sphere(p,vec4(0,1,6,1.4));
+		float bo = box(p,vec3(0,2,6),vec3(1,1,1));
+		float ds = min(sp,bo);
+		di += ds;
+		if(ds > 100.0 || ds < 0.01)break;
+	}
+	return di;
+}
+void main()
+{
+	vec2 resolution = vec2(800,600);
+
+	vec2 uv = (gl_FragCoord.xy - 0.5 * resolution.xy)/resolution.y;
+	vec3 ro = vec3(0,1,0); // camera aka ray origin
+	vec3 rd = normalize(vec3(uv.x,uv.y,1)); // ray direction
+	float d = raymarch(ro,rd);
+
+	d /= 10;
+
+	//FragColor = vec4(uv.xy,0,1);
+    FragColor = vec4(vec3(d), 1.0);  // White color
+}
+
