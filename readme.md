@@ -75,12 +75,5 @@ We can think of this as a library interface, but i currently dont have any plans
 
 ## Version history
 ### v0.1
-- handwritten (fake) physics
-- model rendering with textures (no lighting/ ambient lighting)
-- kb&m input
-- third person camera without collision
-
-> Only game released on `v0.1` is [revenge of the pangolin](https://psyorange.itch.io/revenge-of-the-pangolin), and it's source code can be found in branch with the same name.
-
-### v0.2
 ( currently being worked on )
+
