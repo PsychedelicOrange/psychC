@@ -1,8 +1,8 @@
-# pyschC
-_psychspiration's alter ego written in c_
+![banner.png]( banner.png )
+_psychspiration's successor_
 
 psychC strives to be a collection of well written (reusable, general, sane) functions required for making a game.
-Functions which do not fit these are written separetely and loosy goosy way in the main file most often.
+Functions which do not fit these reqs are written separetely and in a loosy goosy way in the main file most often.
 We can think of this as a library interface, but i currently dont have any plans to separate code and make libs, as functions are not mature yet.
 
 ## Summary of features planned
@@ -20,7 +20,7 @@ We can think of this as a library interface, but i currently dont have any plans
 ## Detailed feature plan
 
 ### animations
-- [ ] model.play_animation()
+- [x] model.play_animation()
 - [ ] load model with multiple animations
 - [ ] morph targets for facial animation
 - [ ] Animation blending
