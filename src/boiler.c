@@ -15,8 +15,8 @@ void init_glfw(int gl_major, int gl_minor){
 
 }
 
-void* create_glfw_window(int SCR_WIDTH, int SCR_HEIGHT){
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "psychspiration", NULL, NULL);
+void* create_glfw_window(int SCR_WIDTH, int SCR_HEIGHT, char* null_terminated_name){
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT,null_terminated_name, NULL, NULL);
     if (window == NULL)
     {
 		printf("\n[FATAL] Unable to create glfw window");

@@ -718,7 +718,7 @@ int main(int argc, char *argv[])
 {
 
 	init_glfw(4,3);
-	GLFWwindow* window = (GLFWwindow*)create_glfw_window(800,600);
+	GLFWwindow* window = (GLFWwindow*)create_glfw_window(800,600,"psychspiration\0");
 	lastX = 800.0f/2;
 	lastY = 600.0f/2;
 	// callbacks and settings on window
