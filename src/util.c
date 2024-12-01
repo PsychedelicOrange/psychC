@@ -2,7 +2,7 @@
 #include <assert.h>
 #include <stdlib.h>
 
-int hashmap_reput(hashmap_int *hash, int key, void *value) {
+int hashmap_upsert(hashmap_int *hash, int key, void *value) {
   assert(hash->size < 100);
   for (size_t i = 0; i < hash->size; i++) {
     if (hash->map[i].key == key) {
@@ -17,7 +17,7 @@ int hashmap_reput(hashmap_int *hash, int key, void *value) {
   return 1;
 }
 
-int hashmap_put(hashmap_int *hash, int key, void *value) {
+int hashmap_insert(hashmap_int *hash, int key, void *value) {
   assert(hash->size < 100);
   for (size_t i = 0; i < hash->size; i++) {
     if (hash->map[i].key == key) {

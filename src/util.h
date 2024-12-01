@@ -25,9 +25,9 @@ typedef struct hashmap_int{
 } hashmap_int;
 
 /* Puts value in key if key exists and returns 1; if key doesn't exists adds it and returns 0 */
-int hashmap_reput(hashmap_int *hash, int key, void *value);
+int hashmap_upsert(hashmap_int *hash, int key, void *value);
 /* puts key value in map if doesnt exist and returns 0; if key exists doesnt do anything and returns 1; */
-int hashmap_put(hashmap_int *hash, int key, void *value);
+int hashmap_insert(hashmap_int *hash, int key, void *value);
 void* hashmap_get(hashmap_int* hash, int n);
 
 #endif

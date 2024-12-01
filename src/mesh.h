@@ -70,11 +70,14 @@ typedef struct animation{
 	float started ;
 }animation;
 
+// all arrays in this struct are stored in the order of joints in the skin gltf model array
 typedef struct skin{
 	mat4s inverseBindMatrices[100];
 	joint* joint_refs[100];
 	size_t joints_count;
 	buffer topo_order;
+	vec3 joint_translation_rest[100];
+	vec4 joint_rotation_rest[100];
 }skin;
 
 typedef struct mesh_actor{

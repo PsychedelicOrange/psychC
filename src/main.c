@@ -25,7 +25,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 
 // -- -- -- -- -- -- Engine Helpers Functions -- -- -- -- -- --- --
 void crash_game(char* msg){
-	printf("\nGame crashed: %s\n",msg);
+	printf("\n[FATAL] Game crashed: %s\n",msg);
 	fflush(stdout);
 	exit(1);
 }
@@ -39,12 +39,12 @@ void print_vec4(float* vec){
 	printf("(%f,%f,%f,%f)",vec[0],vec[1],vec[2],vec[3]);
 }
 void print_mat4_ptr(float* mat){
-	printf("\n[\n");
+	printf("[DEBUG] \n[\n");
 	for(int i =0; i < 4; i++){
 		for(int j =0; j < 4; j++){
 			printf("%f,",mat[(4*i)+j]);
 		}
-		printf("\n");
+		printf("\n[DEBUG] ");
 	}
 	printf("]\n");
 }
@@ -62,59 +62,53 @@ void print_mat4(float mat[4][4]){
 // -- -- -- -- -- -- Cgltf parse helper functions -- -- -- -- - - int cgltf_ctype_to_gl_type[7] = {GL_INVALID_VALUE,GL_BYTE,GL_UNSIGNED_BYTE,GL_SHORT,GL_UNSIGNED_SHORT,GL_UNSIGNED_INT,GL_FLOAT};
 void print_indices(cgltf_accessor* indices){
 	cgltf_buffer_view* buf_view = indices->buffer_view;
-	printf("\n INDICES:");
-	printf("\n\t indices.ctype:\t %i",indices->component_type);
-	printf("\n\t indices.type:\t %i",indices->type);
-	printf("\n\t indices.offset:\t%li",indices->offset);
-	printf("\n\t indices.count:\t%li",indices->count);
-	printf("\n\t indices.stride:\t%li",indices->stride);
-	printf("\n\t\t buffer.name:\t%s",buf_view->buffer->name);
-	printf("\n\t\t buffer_view.offset:\t%li",buf_view->offset);
-	printf("\n\t\t buffer_view.size:\t%li",buf_view->size);
+	printf("\n[DEBUG] INDICES:");
+	printf("\n[DEBUG]\t indices.ctype:\t %i",indices->component_type);
+	printf("\n[DEBUG]\t indices.type:\t %i",indices->type);
+	printf("\n[DEBUG]\t indices.offset:\t%li",indices->offset);
+	printf("\n[DEBUG]\t indices.count:\t%li",indices->count);
+	printf("\n[DEBUG]\t indices.stride:\t%li",indices->stride);
+	printf("\n[DEBUG]\t\t buffer.name:\t%s",buf_view->buffer->name);
+	printf("\n[DEBUG]\t\t buffer_view.offset:\t%li",buf_view->offset);
+	printf("\n[DEBUG]\t\t buffer_view.size:\t%li",buf_view->size);
 }
 void print_accessor(cgltf_accessor *accessor ){
 	cgltf_buffer_view* buf_view = accessor->buffer_view;
-	printf("\n\t Accessor.ctype:\t %i",accessor->component_type);
-	printf("\n\t Accessor.type:\t %i",accessor->type);
-	printf("\n\t Accessor.offset:\t%li",accessor->offset);
-	printf("\n\t Accessor.count:\t%li",accessor->count);
-	printf("\n\t Accessor.stride:\t%li",accessor->stride);
-	printf("\n\t\t buffer.name:\t%s",buf_view->buffer->name);
-	printf("\n\t\t buffer_view.offset:\t%li",buf_view->offset);
-	printf("\n\t\t buffer_view.size:\t%li",buf_view->size);
+	printf("\n[DEBUG]\t Accessor.ctype:\t %i",accessor->component_type);
+	printf("\n[DEBUG]\t Accessor.type:\t %i",accessor->type);
+	printf("\n[DEBUG]\t Accessor.offset:\t%li",accessor->offset);
+	printf("\n[DEBUG]\t Accessor.count:\t%li",accessor->count);
+	printf("\n[DEBUG]\t Accessor.stride:\t%li",accessor->stride);
+	printf("\n[DEBUG]\t\t buffer.name:\t%s",buf_view->buffer->name);
+	printf("\n[DEBUG]\t\t buffer_view.offset:\t%li",buf_view->offset);
+	printf("\n[DEBUG]\t\t buffer_view.size:\t%li",buf_view->size);
 }
 void print_vertex_actor(vertex_actor a){
-	printf("\nfloat position[3]:");
+	printf("\n[DEBUG] float position[3]:");
 	print_vec3(a.position);
-	printf("\nfloat normal[3]:");
+	printf("\n[DEBUG] float normal[3]:");
 	print_vec3(a.normal);
-	printf("\nfloat tangent[4]:");
+	printf("\n[DEBUG] float tangent[4]:");
 	print_vec4(a.tangent);
-	printf("\nunsigned short joints[4]:");
+	printf("\n[DEBUG] unsigned short joints[4]:");
 	printf("(%u,%u,%u,%u)",a.joints[0],a.joints[1],a.joints[2],a.joints[3]);
-	printf("\nfloat weights[4]:");
+	printf("\n[DEBUG] float weights[4]:");
 	print_vec4(a.weights);
 }
 
 void print_sampler(sampler samp){
-	printf("\nsampler print");
-	printf("\nsamp.keyframes: %li",samp.keyframes.size);
-	printf("\nsamp.data: %li",samp.data.size);
-	printf("\nsamp.element: %li",samp.element_size);
-	printf("\nsamp.interpolation: %i",samp.interpolation);
+	printf("\n[DEBUG] samp.keyframes: %li",samp.keyframes.size);
+	printf("\n[DEBUG] samp.data: %li",samp.data.size);
+	printf("\n[DEBUG] samp.element: %li",samp.element_size);
+	printf("\n[DEBUG] samp.interpolation: %i",samp.interpolation);
 }
 void print_joint(joint* j){
-		printf("\n\tJoint \t :");
-		printf("\n\t\tIndex \t %i:",j->gltf_index);
-		printf("\n\t\tTranslation \t :");
+		printf("\n[DEBUG] \tJoint \t :");
+		printf("\n[DEBUG] \t\tIndex \t %i:",j->gltf_index);
+		printf("\n[DEBUG] \t\tTranslation \t :");
 		print_vec3(j->translation);
-		printf("\n\t\tRotation \t :");
+		printf("\n[DEBUG] \t\tRotation \t :");
 		print_vec4(j->rotation.raw);
-}
-void print_mesh_actor(mesh_actor mesh_actor){
-	printf("\n Mesh:");
-	printf("\n Skin:");
-	//printf("\n\t No. of joints:\t %li",mesh_actor.joints_count);
 }
 
 void load_primitives_actor (cgltf_mesh* mesh, mesh_actor* emesh){
@@ -206,13 +200,10 @@ void load_primitives_actor (cgltf_mesh* mesh, mesh_actor* emesh){
 					}
 					break;
 				default:
-					printf("\nActor mesh doesn't support : %s",attributes[j].name);
+					printf("\n[ERROR] Actor mesh doesn't support : %s",attributes[j].name);
 			}
 			fflush(stdout);	
 		}
-	////for(int i =0; i < p.vertex_count; i++){
-	////	print_vertex_actor(p.vertices[i]);
-	////}
 		emesh->primitives[i] = p;
 	}
 }
@@ -315,7 +306,7 @@ void load_animations(cgltf_data* data,model_actor* model){
 	for(int i = 0; i < anim_count; i++){
 		//printf("\n Animation found: %s",data->animations[i].name);
 		animation animation;
-		animation.started = -1;
+		animation.started = 0;
 		animation.channels_count = data->animations[i].channels_count;
 		animation.channels = malloc(sizeof(channel)*animation.channels_count);
 		for(int c = 0;c < animation.channels_count; c ++){
@@ -376,7 +367,7 @@ buffer calc_joint_topo_order(cgltf_data* data,cgltf_skin skin){
 		visited[vindex++] = skin.joints[i] - data->nodes;
 		topo_sort(data,skin.joints[i],visited,&vindex,topo_order_ar,&index);
 	}
-	printf("\n Topological order for joint: \n");
+	printf("\n[DEBUG] Topological order for joint: \n[DEBUG]");
 	for(int i = 0; i < jc;i ++){
 		printf("%i, ",topo_order_ar[i]);
 	}
@@ -395,8 +386,8 @@ model_actor load_model_actor(char* model_path){
 	{
 		result = cgltf_load_buffers(&options, data, model_path);
 		if (result != cgltf_result_success){
-			printf("cgltf couldn't load buffers : %i",result);
-			crash_game("could'nt load model");
+			printf("[ERROR] cgltf couldn't load buffers : %i",result);
+			crash_game("Could'nt load model");
 		}
 
 		//load_meshes
@@ -427,7 +418,7 @@ model_actor load_model_actor(char* model_path){
 					joint* search = hashmap_get(&model.joints,key);
 					if(search == NULL){
 						joint* joint = load_joint(data,data->skins[i].joints[j]);
-						hashmap_put(&model.joints,key,joint);
+						hashmap_insert(&model.joints,key,joint);
 						model.skins[i].joint_refs[j] = joint;
 					}
 				}
@@ -443,11 +434,18 @@ model_actor load_model_actor(char* model_path){
 						}
 					}
 				}
+				// store joint rest translation and rotation in skin
+				{
+					for(int k = 0; k < model.skins[i].joints_count;k++){
+						memcpy(model.skins[i].joint_translation_rest[k],model.skins[i].joint_refs[k]->translation,sizeof(float)*3);
+						memcpy(model.skins[i].joint_rotation_rest[k],model.skins[i].joint_refs[k]->rotation.raw,sizeof(float)*4);
+					}
+				}
 				// debug joints
 				{
-				printf("\nDebug joints:");
+				printf("\n[DEBUG] joints:");
 				for(int j =0; j < model.joints.size;j++){
-					printf("\n key: %i", model.joints.map[j].key);
+					printf("\n[DEBUG] key: %i", model.joints.map[j].key);
 					joint* joint = model.joints.map[j].value;
 					print_joint(joint);
 				}
@@ -516,7 +514,7 @@ drawable_prim upload_single_primitive_actor(primitive_actor p){
 void calc_global_transform_joint(hashmap_int* joints,skin* skin){
 	size_t jc = skin->joints_count;
 
-	// calc global transforms for each joint (in topo order so its simple)
+	// calc global transforms for each joint (in reverse topo order so its simple)
 	int* order = ((int*)skin->topo_order.data);
 	for (int i = (skin->topo_order.size/sizeof(int)) - 1; i >= 0 ; i--){
 		joint* j = hashmap_get(joints,order[i]);
@@ -598,6 +596,7 @@ void animate(drawable_model* model){
 							if(currentTime > endTime){
 								model->animations[j].started = -1;
 								previousTimeIndex = (samp.keyframes.size/sizeof(float))-2;
+								break;
 							}
 							float* keyframes =  samp.keyframes.data;
 							float interpolationValue = (currentTime - keyframes[previousTimeIndex]) / (keyframes[previousTimeIndex+1] - keyframes[previousTimeIndex]);
@@ -634,7 +633,18 @@ void animate(drawable_model* model){
 						break;
 				}
 			}
-		}else{
+		}else if (model->animations[j].started == -1 ){// set to rest
+			for(int i = 0; i < model->meshes_count; i++){
+				skin* skin_ref = model->meshes[i].skin_ref;
+				for(int j = 0; j < skin_ref->joints_count; j++){
+					// for each joint, restore translation and rotatation to rest
+					memcpy(skin_ref->joint_refs[j]->translation,skin_ref->joint_translation_rest[j],sizeof(float)*3);
+					memcpy(skin_ref->joint_refs[j]->rotation.raw,skin_ref->joint_rotation_rest[j],sizeof(float)*4);
+				}
+			}
+			model->animations[j].started = 0;
+		}else {
+			// don't animate further
 		}
 	}
 }
@@ -707,7 +717,7 @@ GLuint setup_screen_quad(void){
 int main(int argc, char *argv[])
 {
 
-	init_glfw();
+	init_glfw(4,3);
 	GLFWwindow* window = (GLFWwindow*)create_glfw_window(800,600);
 	lastX = 800.0f/2;
 	lastY = 600.0f/2;
@@ -715,7 +725,7 @@ int main(int argc, char *argv[])
 	if (glfwRawMouseMotionSupported())
 		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 	glfwSetCursorPosCallback(window, cursor_position_callback);
-	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	//glfwSetKeyCallback(window,key_callback);
 
 
@@ -725,7 +735,7 @@ int main(int argc, char *argv[])
 
 	unsigned int environmentShader = create_shader("/home/parth/code/psychC/shaders/env.vs","/home/parth/code/psychC/shaders/env.fs");
 	unsigned int actorShader = create_shader("/home/parth/code/psychC/shaders/actor.vs","/home/parth/code/psychC/shaders/actor.fs");
-	printf("Shaders Loaded.");fflush(stdout);
+	printf("[DEBUG] Shaders Loaded.");fflush(stdout);
 
 	{
 		mat4s projection = glms_perspective(glm_rad(45.0f), (float)800 / (float)600, 0.1f, 10000.0f);
@@ -758,24 +768,36 @@ int main(int argc, char *argv[])
     {
         // input
         // -----
+		float speed = 1;
+		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+		{
+			dmodel.animations[0].started = glfwGetTime();
+		}
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		{
 			glfwSetWindowShouldClose(window, true);
+			printf("\n[INFO] Exiting...\n");
 		}
-		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_LEFT_SHIFT)){
-			cam.position.y -= 0.1;
+		if( GLFW_PRESS == glfwGetKey(window,GLFW_KEY_LEFT_SHIFT)){
+			speed = 0.1;
+		}
+		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_E)){
+			cam.position.y += speed;
+		}
+		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_Q)){
+			cam.position.y -= speed;
 		}
 		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_W)){
-			cam.position.z -= 0.1;
+			cam.position.z -= speed;
 		}
 		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_A)){
-			cam.position.x -= 0.1;
+			cam.position.x -= speed;
 		}
 		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_S)){
-			cam.position.z += 0.1;
+			cam.position.z += speed;
 		}
 		if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_D)){
-			cam.position.x += 0.1;
+			cam.position.x += speed;
 		}
 		update_first_person_camera(&cam);
 			
@@ -805,7 +827,6 @@ int main(int argc, char *argv[])
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
-	printf("\nbye!\n");
     return 0;
 }
 

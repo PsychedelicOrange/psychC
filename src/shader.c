@@ -23,7 +23,7 @@ unsigned int compile_shader(const char * shaderCode, int shaderType){
 	if (!success)
 	{
 		glGetShaderInfoLog(shader, 512, 0, infoLog);
-		printf("failed to compile shader: %s", infoLog);
+		printf("[FATAL] failed to compile shader: %s", infoLog);
 		return -1;
 	}
 	return shader;
@@ -40,7 +40,7 @@ unsigned int create_program(unsigned int vertexShader, unsigned int fragmentShad
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(shaderProgram, 512, 0, infoLog);
-		printf("failed to link shaders: %s",infoLog);
+		printf("[FATAL] failed to link shaders: %s",infoLog);
 		return -1;
     }
     glDeleteShader(vertexShader);

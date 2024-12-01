@@ -7,7 +7,6 @@
 
 #define MAX_PRIMITIVES 1000
 
-
 typedef struct vertex_env{
 	float position[3];
 	float normal[3];
