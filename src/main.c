@@ -7,7 +7,6 @@
 #include <stddef.h>
 #define CGLTF_IMPLEMENTATION
 #include "disk.h"
-#include "constants.h"
 #include "mesh.h"
 #include "boiler.h"
 #include "shader.h"
@@ -775,7 +774,7 @@ int main(int argc, char *argv[])
 		}
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		{
-			glfwSetWindowShouldClose(window, true);
+			glfwSetWindowShouldClose(window, 1);
 			printf("\n[INFO] Exiting...\n");
 		}
 		if( GLFW_PRESS == glfwGetKey(window,GLFW_KEY_LEFT_SHIFT)){

@@ -1,7 +1,6 @@
 #include "shader.h"
 #include <glad/glad.h>
 #include <stdio.h>
-#include "constants.h"
 #include "disk.h"
 
 unsigned int create_shader(char* vertexPath, char* fragPath){
