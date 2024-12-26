@@ -1,4 +1,4 @@
-#Mesh
+# Mesh
 
 ## Environment: non-destructable static motionless objects. it will have built-in lightmaps.
 * All mesh data of all objects will be packed in one vbo (or multiple in case limit is exceeded)
