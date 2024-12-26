@@ -1,10 +1,11 @@
+#include "env.h"
+#include "log.h"
+#include <glad/glad.h>
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <glad/glad.h>
-#include "env.h"
 
 void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t primitive_index){
 	size_t mpriv_count = mesh->primitives_count;
@@ -12,7 +13,7 @@ void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t pr
 		primitive_env p;
 		size_t attribute_count = mesh->primitives[i].attributes_count;
 		cgltf_attribute* attributes = mesh->primitives[i].attributes;
-		printf("\nVertex count for primitive: %li",attributes[0].data->count);
+		logd("Vertex count for primitive: %li",attributes[0].data->count);
 		fflush(stdout);
 		p.vertices = malloc(sizeof(vertex_env)*attributes[0].data->count);
 		p.vertex_count = attributes[0].data->count;
@@ -27,7 +28,7 @@ void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t pr
 			p.indices = malloc(sizeof(unsigned short)*p.indices_count);
 			memcpy(p.indices,buf_view->buffer->data + buf_view->offset + indices->offset,buf_view->size);
 		}else{
-			printf("\nencountered un-indexed mesh data. eww.");
+			loge("encountered un-indexed mesh data. eww.");
 			exit(1);
 		}
 		
@@ -80,7 +81,7 @@ void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t pr
 					}
 					break;
 				default:
-					printf("\nEnvironment mesh doesn't support : %s",attributes[j].name);
+					logw("Environment mesh doesn't support : %s",attributes[j].name);
 			}
 			fflush(stdout);	
 		}
@@ -109,7 +110,7 @@ size_t load_model_env(char* model_path, primitive_env* primitives, size_t primit
 	{
 		result = cgltf_load_buffers(&options, data, model_path);
 		if (result != cgltf_result_success){
-			printf("cgltf couldn't load buffers : %i",result);
+			loge("cgltf couldn't load buffers : %i",result);
 			exit(1);
 		}
 
@@ -121,7 +122,7 @@ size_t load_model_env(char* model_path, primitive_env* primitives, size_t primit
 		}
 
 	}else{
-		printf("\nPlease check if model exists!");
+		loge("Please check if model exists!");
 		exit(1);
 	}
 	cgltf_free(data);
@@ -171,7 +172,7 @@ buffer append_primitive_vertice_data(primitive_env* primitives,size_t from,size_
 		primitives[i].base_vertex = vertice_count;
 		vertice_count += primitives[i].vertex_count;
 	}
-	printf("\nTotal vertice count for environment mesh: %li",vertice_count);
+	logd("Total vertice count for environment mesh: %li",vertice_count);
 	vertices = malloc(sizeof(vertex_env)*vertice_count);
 	vertex_env* ptr = vertices;
 	for(int i = from; i < to; i++){
@@ -189,7 +190,7 @@ buffer append_primitive_indice_data(primitive_env* primitives,size_t from,size_t
 		primitives[i].index_index = indices_count;
 		indices_count += primitives[i].indices_count;
 	}
-	printf("\nTotal indice count for environment mesh: %li",indices_count);
+	logd("Total indice count for environment mesh: %li",indices_count);
 	indices = malloc(sizeof(unsigned short)*indices_count);
 	unsigned short* ptr = indices;
 	for(int i = from; i < to; i++){
@@ -213,7 +214,7 @@ unsigned int upload_multiple_primitive_env(primitive_env* primitives, size_t pri
 
 	glBindVertexArray(vaos_env); 
 	buffer vertices = append_primitive_vertice_data(primitives,0,primitive_count);
-	printf("Size of vertices buffer: %li",vertices.size);
+	logd("Size of vertices buffer: %li",vertices.size);
 	glBindBuffer(GL_ARRAY_BUFFER,vbos_env);
 	glBufferData(GL_ARRAY_BUFFER, vertices.size,vertices.data,GL_STATIC_DRAW);
 	free(vertices.data);
