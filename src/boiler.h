@@ -2,7 +2,8 @@
 #define BOILER_H
 
 /*
- * Initialise glfw with opengl version and opengl profile and set platform specific window hints .
+ * Initialise glfw with opengl version and opengl profile and set platform specific window hints.
+ * NOTE: OpenGL version will be set to 4.1 on Macs
  */
 void init_glfw(int gl_major,int gl_minor);
 
