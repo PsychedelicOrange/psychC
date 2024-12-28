@@ -8,9 +8,10 @@
 * physics system ( bullet )
 
 ## Motivations
-- psychC strives to be a collection of well written (reusable, general, sane) functions required for making a game.Functions which do not fit these reqs are written separetely and in aloosy goosy way in the main file most often.We can think of this as a library interface, but i currently dont have any plans to separate code and make libs, as functions are not mature yet.
-- as simple as possible, and no simpler - functions are written to be simple as I am the only one developing this.
-- i only know opengl, opengl is the simplest of all, and is sufficient as of now, hence it is picked over vulkan
+- psychC strives to be a collection of well written (reusable, general, sane) functions required for making a game.
+- funcionns should be as simple as possible, and no simpler.
+- there are a lot of functions which do not fit these reqs, they are written temporarily till i figure out a good interface. these will be present in the main file most often.
+- I only know opengl, opengl is the simplest of all, and is sufficient as of now, hence it is picked over vulkan
 - functions should be such that they can be reused to put together a game before a game jam
 - functions should run on both linux and windows ( cross-platform )
 
