@@ -16,6 +16,10 @@
 
 ## Detailed feature plan
 
+### Systems
+- [ ] scene format, parsing exporting, blender exporting
+- [ ] Queue system to queue events ( like audio play, or animation play ) and execute on next frame
+
 ### animations
 - [x] model.play_animation()
 - [x] load model with multiple animations
