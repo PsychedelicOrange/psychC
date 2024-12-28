@@ -18,19 +18,20 @@
 
 ### animations
 - [x] model.play_animation()
-- [ ] load model with multiple animations
+- [x] load model with multiple animations
 - [ ] morph targets for facial animation
 - [ ] Animation blending
 - [ ] drive animation through code
   
 ### input and camera
-- [ ] expose proper functions for camera management styles tps,fps, etc.
+- [x] expose proper functions for camera management styles tps,fps, etc.
 - [ ] a way to handle input that is exhaustive to all input styles (time held, last pressed, modifier keys)
 - [ ] add collision to 3rd person camera
 - [ ] controller support
 
 ### audio
-- [ ] play_sound("walk.wav", transform)
+- [x] load wav files and play audio
+- [ ] play_sound("walk.wav", transform) ( Manager )
 - [ ] streaming audio from disk
 - [ ] mixing multiple audio??
 
@@ -71,6 +72,13 @@
 - [ ] (imgui) pattern to use quickly to debug/iterate on values.
 
 ## Version history
-### v0.1
-( currently being worked on )
-
+### v0.1 ( currently being worked on )
+- really basic pbr. point lighting/ fake ambient term
+- scene descriptor
+- skybox support
+- simple animation support ( no blending )
+- spatial audio
+- first person camera, third person camera
+- mouse and keyboard input support
+- Basic UI support
+- Video playback
