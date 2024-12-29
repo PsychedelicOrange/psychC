@@ -23,7 +23,7 @@
  */
 
 /*
- * The code is modified a bit from the original. - psyorange
+ * The code is modified from the original. - psyorange
  *
  */
 
@@ -36,7 +36,10 @@
 #include "AL/al.h"
 #include "AL/alc.h"
 #include "AL/alext.h"
-int al_init()
+#include "wave.h"
+#include <stdlib.h>
+
+void al_init()
 {
     const ALCchar *name;
     ALCdevice *device;
@@ -54,8 +57,8 @@ int al_init()
 	device  = alcOpenDevice(devicename);
     if(!device)
     {
-		loge("Could'nt open device");
-        return 1;
+		loge("Couldn't open device");
+		exit(1);
     }
 
     ctx = alcCreateContext(device, NULL);
@@ -65,7 +68,7 @@ int al_init()
             alcDestroyContext(ctx);
         alcCloseDevice(device);
 		loge("Couldn't set context");
-        return 1;
+		exit(1);
     }
 
     name = NULL;
@@ -75,7 +78,6 @@ int al_init()
         name = alcGetString(device, ALC_DEVICE_SPECIFIER);
     logi("Opened \"%s\"", name);
 
-    return 0;
 }
 
 void al_close(void)
@@ -98,8 +100,8 @@ void al_list_devices() {
     // Get the list of devices
     const ALCchar *devices = alcGetString(NULL, ALC_DEVICE_SPECIFIER);
     if (!devices) {
-        loge("Failed to get device list");
-        return;
+        logi("Failed to get device list");
+		return;
     }
 
     logi("Available audio devices:");
@@ -110,7 +112,57 @@ void al_list_devices() {
         logp(" - %s\n", device);
         device += strlen(device) + 1;  // Move to the next device string
     }
+}
 
+
+ALenum getOpenALFormatEnum(int num_channels, int bits_per_sample ){
+	ALenum format;
+    if(num_channels == 1 && bits_per_sample == 8)
+        format = AL_FORMAT_MONO8;
+    else if(num_channels == 1 && bits_per_sample == 16)
+        format = AL_FORMAT_MONO16;
+    else if(num_channels == 2 && bits_per_sample == 8)
+        format = AL_FORMAT_STEREO8;
+    else if(num_channels == 2 && bits_per_sample == 16)
+        format = AL_FORMAT_STEREO16;
+    else
+	{
+		loge("format not supported : no. of channes = %i, \
+				bits per sample = %i",num_channels,bits_per_sample); 
+		exit(1);
+    }
+	return format;
+}
+
+
+ALuint al_create_source(){
+    ALuint source;
+	// clear error array
+    ALenum error; alGetError();
+    alGenSources(1,&source);
+    if ((error = alGetError()) != AL_NO_ERROR || !source)
+    {
+		loge("Couldn't generate source : %i", error);
+		exit(1);
+    }
+
+	/*alSourcef(source, AL_GAIN, 1.0f);*/
+	/*alSource3f(source, AL_POSITION, 0, 0, 0);*/
+	/*alSource3f(source, AL_VELOCITY, 0, 0, 0);*/
+	/*alSource3f(source, AL_DIRECTION,0,0,0);*/
+	/*alSourcei(source, AL_LOOPING, AL_FALSE);*/
+
+	return source;
+}
+
+void al_attach_buffer(ALuint source, ALuint buffer){
+    ALenum error = alGetError();
+	alSourcei(source, AL_BUFFER, buffer);
+	if ((error = alGetError()) != AL_NO_ERROR)
+	{
+		loge("Couldn't attach buffer to source: %x", error);
+		exit(1);
+	}
 }
 
 const char* al_format_name(ALenum format)
@@ -168,3 +220,36 @@ const char* al_format_name(ALenum format)
     return "Unknown Format";
 }
 
+
+ /* TODO: ideally here we should have a third header file with dependency on both
+	 alhelper and wave and other future formats; this header file will expose the api.
+	 This is the wav specific code for future ref. -psyorange
+  */
+ALuint load_wav_into_buffer(wav_file wav){
+	ALuint buffer;
+	// clear error array
+	ALenum error; alGetError();
+	alGenBuffers(1,&buffer);
+	if ((error = alGetError()) != AL_NO_ERROR || !buffer)
+	{
+		loge("Couldn't generate buffer: %x", error);
+		exit(1);
+	}
+	alBufferData(buffer,wav.format,wav.data,wav.size,wav.fmt.sample_rate);
+	if ((error = alGetError()) != AL_NO_ERROR || !buffer)
+	{
+		loge("Couldn't load data into buffer: %x", error);
+		exit(1);
+	}
+	free(wav.data);
+	return buffer;
+}
+
+ALuint al_load(const char* file_path){
+	wav_file wav = load_wav(file_path);
+	{
+		wav.format = getOpenALFormatEnum(wav.fmt.num_channels, wav.fmt.bits_per_sample);
+		logi("Format : %s", al_format_name(wav.format));
+	}
+	return load_wav_into_buffer(wav);
+}

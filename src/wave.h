@@ -20,6 +20,6 @@ typedef struct wav_file{
     int format; // OpenALenum 
 }wav_file;
 
-wav_file load_wav(char* path);
+wav_file load_wav(const char* file_path);
 
 #endif

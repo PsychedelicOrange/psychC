@@ -2,9 +2,10 @@
 /* LOGGER_MODULE - you can copy this block to be used in single header / standalone files - psyorange
  *	#include <stdio.h>
  *  #include <stdarg.h>
- *  #define LOG_QUIET
- *  #define LOG_ERROR_ONLY
+ *  #DEFINE LOG_QUIET
+ *  #DEFINE LOG_ERROR_ONLY
  * */
+#define LOG_ERROR_ONLY
 
 void logp(const char* fmt, ...){
 #if !defined (LOG_QUIET) && !defined(LOG_ERROR_ONLY)

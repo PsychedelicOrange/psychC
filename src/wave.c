@@ -45,13 +45,13 @@ void parseHeader(FILE* file){
 	logi("Header validation succeeded"); 
 }
 
-wav_file load_wav(char* path){
-	logi("Loading wav file : %s",path); 
+wav_file load_wav(const char* file_path){
+	logi("Loading wav file : %s",file_path); 
 	wav_file wav;
 
-	FILE* file = fopen(path,"r");
+	FILE* file = fopen(file_path,"r");
 	if(!file){
-		loge("Couldn't open file: %s",path); 
+		loge("Couldn't open file: %s",file_path); 
 		exit(1);
 	}
 
