@@ -1,10 +1,8 @@
 # Build instuctions
 ## Linux
-### Requirements
-- a c compiler, currently tested on [ gcc , clang ]
-- Cmake
-- make
-## Build 
 - Install all dependencies not provided in source, make sure your compiler is including headers and able to link libs from system folders.
+    - [openALSoft](https://github.com/kcat/openal-soft)
+    - [glfw3](https://github.com/glfw/glfw)
+    - [cglm](https://github.com/recp/cglm)
 ` cmake . `
 ` make `
