@@ -1,10 +1,11 @@
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 char* read_string_from_disk(const char* filename){
 	// Open the file in read mode ("r")
 	FILE* file = fopen(filename, "r");
 	if (!file) {
-		printf("\n[FATAL] Could not open file %s\n", filename);
+		loge("Could not open file %s\n", filename);
 		fflush(stdout);
 		return NULL;
 	}
@@ -17,7 +18,7 @@ char* read_string_from_disk(const char* filename){
 	// Allocate memory for the file content (+1 for the null terminator)
 	char* content = (char*)malloc((fileSize + 1) * sizeof(char));
 	if (!content) {
-		printf("\n[FATAL] Memory allocation failed\n");
+		loge("Memory allocation failed\n");
 		fclose(file);
 		return NULL;
 	}
