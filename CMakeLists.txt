@@ -6,6 +6,8 @@ project(
 	DESCRIPTION "game engine"
 	LANGUAGES C
 	)
+# generate compile_compands for clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE srcfiles src/*.c src/*.h)
 
@@ -25,3 +27,5 @@ target_link_libraries( psychspiration
 	OpenAL::OpenAL
 	cglm
 	)
+
+
