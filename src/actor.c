@@ -502,7 +502,6 @@ void vertexAttrib_actor(){
 void draw_model(drawable_model* dmodel,unsigned int shaderProgram){
     for(int i = 0; i < dmodel->meshes_count; i++){
 	// TODO combine vbos for all vbos in future ( check materials flow ?)
-    logd("inside draw_model %f", dmodel->animations->started);
 	drawable_mesh* mesh_actor = &dmodel->meshes[i];
 	if(mesh_actor->skin_ref != NULL){
 	    animate(dmodel);
