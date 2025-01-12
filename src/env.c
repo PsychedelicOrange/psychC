@@ -11,12 +11,10 @@
 
 void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t primitive_index){
 	size_t mpriv_count = mesh->primitives_count;
-	logd("no. of primitives in current mesh: %i", mpriv_count);
 	for(size_t i = 0; i < mpriv_count;i++){
 		primitive_env p;
 		size_t attribute_count = mesh->primitives[i].attributes_count;
 		cgltf_attribute* attributes = mesh->primitives[i].attributes;
-		logd("Vertex count for primitive: %li",attributes[0].data->count);
 		fflush(stdout);
 		p.vertices = malloc(sizeof(vertex_env)*attributes[0].data->count);
 		p.vertex_count = attributes[0].data->count;
@@ -89,9 +87,9 @@ void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t pr
 			fflush(stdout);	
 		}
 		primitives[primitive_index++] = p;
-		logd("primitive %i loaded",i);
 	}
 }
+
 void vertexAttrib_env(){
 	glEnableVertexAttribArray(0);	
 	glVertexAttribPointer(0,3,GL_FLOAT, GL_FALSE, sizeof(vertex_env), (void*)(offsetof(vertex_env,position)));
@@ -122,8 +120,9 @@ size_t load_model_env(char* model_path, primitive_env* primitives, size_t primit
 		logd("Found %i meshes in model",data->meshes_count);
 		cgltf_mesh* meshes = data->meshes;
 		for(int i=0; i< meshes_count; i++){
-			load_primitives_env(meshes,primitives,primitive_index);
-			primitive_index += meshes->primitives_count;
+		    logd("loading mesh: %i",i);
+		    load_primitives_env(&meshes[i],primitives,primitive_index);
+		    primitive_index += meshes->primitives_count;
 		}
 
 	}else{
@@ -131,6 +130,7 @@ size_t load_model_env(char* model_path, primitive_env* primitives, size_t primit
 		exit(1);
 	}
 	cgltf_free(data);
+	logd("Total primitive count: %i",primitive_index);
 	return primitive_index;
  }
 
@@ -162,18 +162,26 @@ void draw_single_primitive_env(unsigned int shaderProgram,drawable_prim d){
 }
 
 void draw_multiple_primitive_env(unsigned int shaderProgram,unsigned int env_vao,primitive_env* primitives, size_t primitive_count){
-	glUseProgram(shaderProgram);
-	glBindVertexArray(env_vao);
-	for(int i = 0; i < primitive_count;i++){
-		//printf("\nglDrawElementsBaseVertex(GL_TRIANGLES, %li, GL_UNSIGNED_SHORT,(void*) %li, %li)",primitives[i].indices_count, (primitives[i].index_index), primitives[i].base_vertex);
-		glDrawElementsBaseVertex(GL_TRIANGLES, primitives[i].indices_count, GL_UNSIGNED_SHORT, (void*)(primitives[i].index_index * 2), primitives[i].base_vertex);
-	}
+    glUseProgram(shaderProgram);
+    glBindVertexArray(env_vao);
+    for(int i = 0; i < primitive_count;i++){
+	logd("glDrawElementsBaseVertex(GL_TRIANGLES, %li, GL_UNSIGNED_SHORT,(void*) %li, %li)" ,primitives[i].indices_count, (primitives[i].base_index) , primitives[i].base_vertex);
+	glDrawElementsBaseVertex(
+	    GL_TRIANGLES,
+	    primitives[i].indices_count,
+	    GL_UNSIGNED_SHORT,
+	    (void*)(primitives[i].base_index * sizeof(unsigned short)),
+	    primitives[i].base_vertex
+	);
+    }
 }
 
 buffer append_primitive_vertice_data(primitive_env* primitives,size_t from,size_t to){
 	vertex_env* vertices;
 	size_t vertice_count =0;
 	for(int i = from; i < to; i++){
+	    logd("Primitive %i, vertex count -> %li",i,primitives[i].vertex_count);
+	    logd("Primitive %i, vertex base count -> %li",i,vertice_count);
 		primitives[i].base_vertex = vertice_count;
 		vertice_count += primitives[i].vertex_count;
 	}
@@ -181,7 +189,7 @@ buffer append_primitive_vertice_data(primitive_env* primitives,size_t from,size_
 	vertices = malloc(sizeof(vertex_env)*vertice_count);
 	vertex_env* ptr = vertices;
 	for(int i = from; i < to; i++){
-		memcpy(ptr,primitives[i].vertices,primitives[i].vertex_count*sizeof(vertex_env));
+		memcpy(ptr, primitives[i].vertices, primitives[i].vertex_count*sizeof(vertex_env));
 		ptr += primitives[i].vertex_count;
 	}
 	buffer buf = {vertices,vertice_count*sizeof(vertex_env)};
@@ -192,7 +200,7 @@ buffer append_primitive_indice_data(primitive_env* primitives,size_t from,size_t
 	unsigned short* indices;
 	size_t indices_count = 0;
 	for(int i = from; i < to; i++){
-		primitives[i].index_index = indices_count;
+		primitives[i].base_index = indices_count;
 		indices_count += primitives[i].indices_count;
 	}
 	logd("Total indice count for environment mesh: %li",indices_count);
@@ -207,25 +215,21 @@ buffer append_primitive_indice_data(primitive_env* primitives,size_t from,size_t
 }
 
 unsigned int upload_multiple_primitive_env(primitive_env* primitives, size_t primitive_count){
-	// smash env mesh into a single buffer, 
-	unsigned int vbos_env;
-	unsigned int vaos_env;
-	unsigned int ebos_env;
-	// generate buffers, arrange env data and load the batches into vbos 
-	//
-	glGenVertexArrays(1,&vaos_env);
-	glGenBuffers(1, &vbos_env);
-	glGenBuffers(1, &ebos_env);
-
-	glBindVertexArray(vaos_env); 
+	// smash primitives vertex data into a single buffer, 
+	unsigned int vbo;
+	unsigned int vao;
+	unsigned int ebo;
+	glGenVertexArrays(1,&vao);
+	glGenBuffers(1, &vbo);
+	glGenBuffers(1, &ebo);
+	glBindVertexArray(vao); 
 	buffer vertices = append_primitive_vertice_data(primitives,0,primitive_count);
-	logd("Size of vertices buffer: %li",vertices.size);
-	glBindBuffer(GL_ARRAY_BUFFER,vbos_env);
+	glBindBuffer(GL_ARRAY_BUFFER,vbo);
 	glBufferData(GL_ARRAY_BUFFER, vertices.size,vertices.data,GL_STATIC_DRAW);
 	free(vertices.data);
 
 	buffer indices = append_primitive_indice_data(primitives,0,primitive_count);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebos_env);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size,indices.data,GL_STATIC_DRAW);
 	free(indices.data);
 
@@ -234,6 +238,5 @@ unsigned int upload_multiple_primitive_env(primitive_env* primitives, size_t pri
 	glBindBuffer(GL_ARRAY_BUFFER, 0); 
 	glBindVertexArray(0); 
 
-	return vaos_env;
+	return vao;
 }
-

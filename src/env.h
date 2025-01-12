@@ -23,18 +23,17 @@ typedef struct primitive_env{
     size_t indices_count;
     // index into large buffer
     size_t base_vertex;
-    size_t index_index; // lol
+    size_t base_index; // lol
 }primitive_env;
 
-// Load model from file to memory. 
+// Load primtives from file to memory. 
 size_t load_model_env(char* model_path, primitive_env* primitives, size_t primitive_index);
 
 drawable_prim upload_single_primitive_env(primitive_env p);
 void draw_single_primitive_env(unsigned int shaderProgram,drawable_prim d);
 
-// batches multiple primitives vertex data into one buffer
+// smashes multiple primitive data into one buffer 
 unsigned int upload_multiple_primitive_env(primitive_env* primitives, size_t primitive_count);
 void draw_multiple_primitive_env(unsigned int shaderProgram,unsigned int env_vao,primitive_env* primitives, size_t primitive_count);
 
 #endif
-
