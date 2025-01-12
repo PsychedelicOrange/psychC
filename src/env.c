@@ -6,9 +6,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "cgltfhelper.h"
+
 
 void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t primitive_index){
 	size_t mpriv_count = mesh->primitives_count;
+	logd("no. of primitives in current mesh: %i", mpriv_count);
 	for(size_t i = 0; i < mpriv_count;i++){
 		primitive_env p;
 		size_t attribute_count = mesh->primitives[i].attributes_count;
@@ -21,15 +24,15 @@ void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t pr
 
 		// load indices 
 		if(mesh->primitives[i].indices != NULL){
-			cgltf_accessor* indices = mesh->primitives[i].indices;
-			assert(indices->component_type == cgltf_component_type_r_16u);
-			cgltf_buffer_view* buf_view = indices->buffer_view;
-			p.indices_count = indices->count;
-			p.indices = malloc(sizeof(unsigned short)*p.indices_count);
-			memcpy(p.indices,buf_view->buffer->data + buf_view->offset + indices->offset,buf_view->size);
+		    cgltf_accessor* indices = mesh->primitives[i].indices;
+		    assert(indices->component_type == cgltf_component_type_r_16u);
+		    buffer buf = load_accessor(indices);
+		    p.indices_count = indices->count;
+		    p.indices = buf.data;
+		    assert(p.indices_count == buf.size/sizeof (unsigned short));
 		}else{
-			loge("encountered un-indexed mesh data. eww.");
-			exit(1);
+		    loge("encountered un-indexed mesh data. eww.");
+		    exit(1);
 		}
 		
 		for(size_t j =0; j < attribute_count;j++){
@@ -86,6 +89,7 @@ void load_primitives_env (cgltf_mesh* mesh, primitive_env* primitives, size_t pr
 			fflush(stdout);	
 		}
 		primitives[primitive_index++] = p;
+		logd("primitive %i loaded",i);
 	}
 }
 void vertexAttrib_env(){
@@ -115,6 +119,7 @@ size_t load_model_env(char* model_path, primitive_env* primitives, size_t primit
 		}
 
 		size_t meshes_count = data->meshes_count;
+		logd("Found %i meshes in model",data->meshes_count);
 		cgltf_mesh* meshes = data->meshes;
 		for(int i=0; i< meshes_count; i++){
 			load_primitives_env(meshes,primitives,primitive_index);

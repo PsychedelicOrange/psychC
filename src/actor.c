@@ -1,8 +1,9 @@
 #include "log.h"
-#include "actor.h"
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
-#include "pretty.h"
+#include "actor.h"
+#include "cgltfhelper.h"
+#include "string.h"
 
 // private functions
 void load_primitives_actor (cgltf_mesh* mesh, mesh_actor* emesh);
@@ -21,30 +22,6 @@ int get_previous_index(float currentTime,buffer buffer);
 void calc_global_transform_joint(hashmap_int* joints,skin* skin);
 void calc_joint_matrices(float* matrices, skin* skin);
 
-// prints
-void print_indices(cgltf_accessor* indices){
-    cgltf_buffer_view* buf_view = indices->buffer_view;
-    logd("INDICES:");
-    logd("indices.ctype:\t %i",indices->component_type);
-    logd("indices.type:\t %i",indices->type);
-    logd("indices.offset:\t%li",indices->offset);
-    logd("indices.count:\t%li",indices->count);
-    logd("indices.stride:\t%li",indices->stride);
-    logd("buffer.name:\t%s",buf_view->buffer->name);
-    logd("buffer_view.offset:\t%li",buf_view->offset);
-    logd("buffer_view.size:\t%li",buf_view->size);
-}
-void print_accessor(cgltf_accessor *accessor ){
-    cgltf_buffer_view* buf_view = accessor->buffer_view;
-    logd("Accessor.ctype:\t %i",accessor->component_type);
-    logd("Accessor.type:\t %i",accessor->type);
-    logd("Accessor.offset:\t%li",accessor->offset);
-    logd("Accessor.count:\t%li",accessor->count);
-    logd("Accessor.stride:\t%li",accessor->stride);
-    logd("buffer.name:\t%s",buf_view->buffer->name);
-    logd("buffer_view.offset:\t%li",buf_view->offset);
-    logd("buffer_view.size:\t%li",buf_view->size);
-}
 void print_vertex_actor(vertex_actor a){
     logd("float position[3]:");
     print_vec3(a.position);
@@ -183,12 +160,12 @@ void load_primitives_actor (cgltf_mesh* mesh, mesh_actor* emesh){
 
 	// load indices 
 	if(mesh->primitives[i].indices != NULL){
-	    cgltf_accessor* indices = mesh->primitives[0].indices;
+	    cgltf_accessor* indices = mesh->primitives[i].indices;
 	    assert(indices->component_type == cgltf_component_type_r_16u);
-	    cgltf_buffer_view* buf_view = indices->buffer_view;
+	    buffer buf = load_accessor(indices);
 	    p.indices_count = indices->count;
-	    p.indices = malloc(sizeof(unsigned short)*p.indices_count);
-	    memcpy(p.indices,buf_view->buffer->data + buf_view->offset + indices->offset,buf_view->size);
+	    p.indices = buf.data;
+	    assert(p.indices_count == buf.size/sizeof (unsigned short));
 	}else{
 	    loge("encountered un-indexed mesh data. eww.");
 	}
@@ -410,34 +387,6 @@ sampler load_sampler(cgltf_animation_sampler* gsamp){
 }
 
 
-buffer load_accessor(cgltf_accessor* acc){
-    buffer buf;
-    cgltf_buffer_view* buf_view = acc->buffer_view;
-    //printf("\n Loading accessor");
-    //print_accessor(acc);
-    void* att_buf = buf_view->buffer->data + buf_view->offset + acc->offset;
-    size_t att_size = buf_view->size;
-    // get size of individual attribute from types;
-    int elSize = getBytesPerElement(acc);
-    buf.size = elSize * acc->count;
-    buf.data = malloc(elSize* acc->count);
-
-    //printf("\n\tAccessor element size in bytes: %i",elSize);
-    for(int i = 0; i < acc->count; i++){
-	memcpy((void*)((char*)buf.data+(elSize*i)),att_buf,elSize);
-	att_buf = (void*) ((char*)att_buf + acc->stride);
-    }
-    return buf;
-}
-
-size_t getBytesPerElement(cgltf_accessor* acc){
-    cgltf_component_type ctype = acc->component_type;
-    cgltf_type type = acc->type;
-    int cgltf_ctype_to_bytes[] = {-1,1,1,2,2,4,4};
-    int cgltf_type_to_count[]= {-1,1,2,3,4,4,9,16};	
-    return cgltf_ctype_to_bytes[ctype]*type;
-}
-
 
 drawable_model upload_model_actor(model_actor* model){
     drawable_model dmodel;
@@ -502,7 +451,6 @@ void vertexAttrib_actor(){
 void draw_model(drawable_model* dmodel,unsigned int shaderProgram){
     for(int i = 0; i < dmodel->meshes_count; i++){
 	// TODO combine vbos for all vbos in future ( check materials flow ?)
-    logd("inside draw_model %f", dmodel->animations->started);
 	drawable_mesh* mesh_actor = &dmodel->meshes[i];
 	if(mesh_actor->skin_ref != NULL){
 	    animate(dmodel);

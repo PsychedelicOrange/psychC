@@ -3,6 +3,7 @@
 
 #include <cglm/cglm.h>   /* for inline */
 #include <cglm/struct.h>
+#include "input.h"
 
 typedef struct camera{
 	mat4s lookAt;
@@ -21,5 +22,7 @@ void update_camera_mouse_callback(camera* camera, float xoffset,float yoffset);
 void update_third_person_camera(camera* camera,vec3s position);
 
 void update_first_person_camera(camera* camera);
+
+void handle_camera_input(camera* camera, input i);
 
 #endif
