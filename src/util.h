@@ -1,9 +1,9 @@
 #ifndef UTIL_H
 #define UTIL_H
 #include <stddef.h>
-#include <stdio.h>
-#include <string.h>
-// convinience structs for in out
+
+/* Convinience structs for in out */
+
 typedef struct drawable_prim{
 	unsigned int vao;
 	size_t indices_count;
@@ -14,6 +14,8 @@ typedef struct buffer{
 	size_t size;
 }buffer;
 
+ /* naive hashmap */
+
 typedef struct hashmap_int_entry{
     int key;
     void* value;
@@ -23,6 +25,12 @@ typedef struct hashmap_int{
 	hashmap_int_entry map[100];
 	size_t size;
 } hashmap_int;
+
+
+/* pretty print vectors and matrices */
+void print_vec3(float* vec);
+void print_vec4(float* vec);
+void print_mat4(float* mat);
 
 /* Puts value in key if key exists and returns 1; if key doesn't exists adds it and returns 0 */
 int hashmap_upsert(hashmap_int *hash, int key, void *value);

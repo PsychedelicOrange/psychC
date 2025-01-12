@@ -117,8 +117,6 @@ drawable_model upload_model_actor(model_actor* model);
 void draw_model(drawable_model* dmodel,unsigned int shaderProgram);
 void draw_single_primitive_actor(unsigned int shaderProgram,drawable_prim d);
 
-void print_indices(cgltf_accessor* indices);
-void print_accessor(cgltf_accessor *accessor);
 void print_vertex_actor(vertex_actor a);
 void print_sampler(sampler samp);
 void print_joint(joint* j);

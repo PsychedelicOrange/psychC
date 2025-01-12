@@ -13,7 +13,7 @@ file(GLOB_RECURSE srcfiles src/*.c src/*.h)
 
 add_executable(psychspiration ${srcfiles})
 
-target_compile_options(psychspiration PRIVATE -Wall )
+target_compile_options(psychspiration PRIVATE -Wall -g)
 
 target_include_directories(psychspiration PRIVATE src)
 
