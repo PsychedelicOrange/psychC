@@ -3,12 +3,13 @@
 #include <cglm/cglm.h>
 #include <cglm/struct.h>
 #include <stddef.h>
-#define CGLTF_IMPLEMENTATION
+#include "env.h"
 #include "actor.h"
 #include "boiler.h"
 #include "shader.h"
 #include "camera.h"
 #include "log.h"
+#include "input.h"
 // --- -- -- - -- - - Defines -- -- -- - -- -- -- -- -- -- 
 const vec3s up = {{0,1,0}};
 float lastX,lastY;
@@ -49,6 +50,7 @@ GLuint setup_screen_quad(void){
 
 int main(int argc, char *argv[])
 {
+    float lastFrame = 0;
 
     init_glfw(4,3);
     GLFWwindow* window = (GLFWwindow*)create_glfw_window(800,600,"psychspiration\0");
@@ -59,6 +61,8 @@ int main(int argc, char *argv[])
 	glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    input i = {};
+    set_key_callback(window,&i);
 
     cam = init_camera();
 
@@ -69,56 +73,46 @@ int main(int argc, char *argv[])
     logd("Shaders Loaded.");
 
     {
-		mat4s projection = glms_perspective(glm_rad(45.0f), (float)800 / (float)600, 0.1f, 10000.0f);
-		mat4s cube_transform = GLMS_MAT4_IDENTITY_INIT;
-		setUniformMat4(actorShader,projection,"projection");
-		setUniformMat4(actorShader,cube_transform,"model");
+	mat4s projection = glms_perspective(glm_rad(45.0f), (float)800 / (float)600, 0.1f, 10000.0f);
+	mat4s cube_transform = GLMS_MAT4_IDENTITY_INIT;
+	setUniformMat4(environmentShader,projection,"projection");
+	setUniformMat4(environmentShader,cube_transform,"model");
+	setUniformMat4(actorShader,projection,"projection");
+	setUniformMat4(actorShader,cube_transform,"model");
     }
 
-    // load primitives for actors into mem
-    model_actor model = load_model_actor(argv[1]);
-    drawable_model dmodel = upload_model_actor(&model);
+    // load environment
+    primitive_env prim[1000];
+    int env_prim_count = load_model_env(argv[1],prim,0);
+    int vao = upload_multiple_primitive_env(prim,env_prim_count);
 
-	// uncomment this call to draw in wireframe polygons.
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // load primitives for actors into mem
+    /*model_actor model = load_model_actor(argv[1]);*/
+    /*drawable_model dmodel = upload_model_actor(&model);*/
+
+    // uncomment this call to draw in wireframe polygons.
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
     {
+	i.delta_time = glfwGetTime() - lastFrame;
+	lastFrame = glfwGetTime();
+
 	// input
 	// -----
-	float speed = 1;
-	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+	if (i.keys[GLFW_KEY_SPACE] == GLFW_PRESS)
 	{
-	    dmodel.animations[0].started = glfwGetTime();
-		logd("Started animation.");
+		/*   dmodel.animations[0].started = glfwGetTime();*/
+		/*logd("Started animation.");*/
 	}
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+	if (i.keys[GLFW_KEY_ESCAPE] == GLFW_PRESS)
 	{
 	    glfwSetWindowShouldClose(window, 1);
 	    logi("Exiting...\n");
 	}
-	if( GLFW_PRESS == glfwGetKey(window,GLFW_KEY_LEFT_SHIFT)){
-	    speed = 0.1;
-	}
-	if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_E)){
-	    cam.position.y += speed;
-	}
-	if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_Q)){
-	    cam.position.y -= speed;
-	}
-	if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_W)){
-	    cam.position.z -= speed;
-	}
-	if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_A)){
-	    cam.position.x -= speed;
-	}
-	if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_S)){
-	    cam.position.z += speed;
-	}
-	if( GLFW_PRESS == glfwGetKey(window, GLFW_KEY_D)){
-	    cam.position.x += speed;
-	}
+
+	handle_camera_input(&cam,i);
 	update_first_person_camera(&cam);
 
 	// render
@@ -129,10 +123,11 @@ int main(int argc, char *argv[])
 	// draw actors
 	// set global shader variables
 	glm_look(cam.position.raw,cam.front.raw,cam.up.raw,cam.lookAt.raw);
+	setUniformMat4(environmentShader,cam.lookAt,"view");
 	setUniformMat4(actorShader,cam.lookAt,"view");
 
-	draw_model(&dmodel,actorShader);
-	//draw_single_primitive_env(actorShader,d);
+	//draw_model(&dmodel,actorShader);
+	draw_multiple_primitive_env(environmentShader,vao,prim,env_prim_count);
 	// glBindVertexArray(0); // no need to unbind it every time 
 
 	// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
