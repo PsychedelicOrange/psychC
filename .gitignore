@@ -16,3 +16,9 @@ CMakeUserPresets.json
 psychspiration
 resources
 models
+
+.vscode
+
+
+*.wav
+*.out
