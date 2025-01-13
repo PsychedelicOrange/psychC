@@ -23,3 +23,6 @@
             - scene2.json
             - scene3.json
 ```
+
+## gltf asset guideline/ support
+- Do not add transforms to mesh nodes, they will not be applied
