@@ -78,12 +78,12 @@
 
 ## Version history
 ### v0.1 ( currently being worked on )
-- really basic pbr. point lighting/ fake ambient term
-- scene descriptor
-- skybox support
-- simple animation support ( no blending )
-- spatial audio
-- first person camera, third person camera
-- mouse and keyboard input support
-- Basic UI support
-- Video playback
+- really basic pbr. point lighting/ fake ambient term [ ]
+- scene descriptor [ ]
+- skybox support [ ]
+- simple animation support ( no blending ) [x]
+- spatial audio [x]
+- first person camera, third person camera [x]
+- mouse and keyboard input support [x]
+- Basic UI support [ ]
+- Video playback [ ]

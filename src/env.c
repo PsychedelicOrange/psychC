@@ -165,7 +165,7 @@ void draw_multiple_primitive_env(unsigned int shaderProgram,unsigned int env_vao
     glUseProgram(shaderProgram);
     glBindVertexArray(env_vao);
     for(int i = 0; i < primitive_count;i++){
-	logd("glDrawElementsBaseVertex(GL_TRIANGLES, %li, GL_UNSIGNED_SHORT,(void*) %li, %li)" ,primitives[i].indices_count, (primitives[i].base_index) , primitives[i].base_vertex);
+	//logd("glDrawElementsBaseVertex(GL_TRIANGLES, %li, GL_UNSIGNED_SHORT,(void*) %li, %li)" ,primitives[i].indices_count, (primitives[i].base_index) , primitives[i].base_vertex);
 	glDrawElementsBaseVertex(
 	    GL_TRIANGLES,
 	    primitives[i].indices_count,
@@ -180,8 +180,8 @@ buffer append_primitive_vertice_data(primitive_env* primitives,size_t from,size_
 	vertex_env* vertices;
 	size_t vertice_count =0;
 	for(int i = from; i < to; i++){
-	    logd("Primitive %i, vertex count -> %li",i,primitives[i].vertex_count);
-	    logd("Primitive %i, vertex base count -> %li",i,vertice_count);
+	    /*logd("Primitive %i, vertex count -> %li",i,primitives[i].vertex_count);
+	    logd("Primitive %i, vertex base count -> %li",i,vertice_count); */
 		primitives[i].base_vertex = vertice_count;
 		vertice_count += primitives[i].vertex_count;
 	}
