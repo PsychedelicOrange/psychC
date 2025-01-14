@@ -7,6 +7,16 @@
 
 #define MAX_PRIMITIVES 1000
 
+typedef struct material_env{
+    unsigned int base_color;
+    unsigned int rough_metal;
+    unsigned int normal;
+    unsigned int lightmap;
+    float base_color_factor[4];
+    float metallic_factor;
+    float roughness_factor;
+}material_env;
+
 typedef struct vertex_env{
     float position[3];
     float normal[3];
@@ -23,7 +33,8 @@ typedef struct primitive_env{
     size_t indices_count;
     // index into large buffer
     size_t base_vertex;
-    size_t base_index; // lol
+    size_t base_index;
+    material_env material;
 }primitive_env;
 
 // Load primtives from file to memory. 
