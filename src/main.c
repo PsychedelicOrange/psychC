@@ -18,6 +18,9 @@ camera cam;
 // -- -- -- -- -- -- Function declare -- -- -- -- -- --- --
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
+void gl_settings(){
+    glEnable(GL_DEPTH_TEST);
+}
 
 // -- -- -- -- -- -- debug print math functions -- -- -- -- - -
 //
@@ -67,6 +70,7 @@ int main(int argc, char *argv[])
     cam = init_camera();
 
     init_glad();
+    gl_settings();
 
     unsigned int environmentShader = create_shader("/home/parth/code/psychC/shaders/env.vs","/home/parth/code/psychC/shaders/env.fs");
     unsigned int actorShader = create_shader("/home/parth/code/psychC/shaders/actor.vs","/home/parth/code/psychC/shaders/actor.fs");
@@ -90,8 +94,8 @@ int main(int argc, char *argv[])
     /*model_actor model = load_model_actor(argv[1]);*/
     /*drawable_model dmodel = upload_model_actor(&model);*/
 
-    // uncomment this call to draw in wireframe polygons.
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    /* one time variables shader set */
+    set_shader_texture_units(environmentShader);
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -118,7 +122,7 @@ int main(int argc, char *argv[])
 	// render
 	// ------
 	glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// draw actors
 	// set global shader variables

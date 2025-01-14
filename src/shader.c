@@ -46,8 +46,30 @@ unsigned int create_program(unsigned int vertexShader, unsigned int fragmentShad
     glDeleteShader(fragmentShader);
     return shaderProgram;
 }
+/* This might cause slowness ?? can delegate shaderProgram selection to user maybe */
 void setUniformMat4(unsigned int shaderProgram,mat4s matrix, char* location){
     glUseProgram(shaderProgram);
     int loc = glGetUniformLocation(shaderProgram,location);
     glUniformMatrix4fv(loc,1,GL_FALSE,&matrix.col[0].raw[0]);	
+}
+void setUniformFloat4(unsigned int shaderProgram,float* floatArray, char* location){
+    glUseProgram(shaderProgram);
+    int loc = glGetUniformLocation(shaderProgram,location);
+    glUniform4fv(loc,1,floatArray);	
+}
+void setUniformFloat(unsigned int shaderProgram,float number, char* location){
+    glUseProgram(shaderProgram);
+    int loc = glGetUniformLocation(shaderProgram,location);
+    glUniform1f(loc,number);	
+}
+void setUniformInt(unsigned int shaderProgram,int integer, char* location){
+    glUseProgram(shaderProgram);
+    int loc = glGetUniformLocation(shaderProgram,location);
+    glUniform1i(loc,integer);	
+}
+void set_shader_texture_units(unsigned int shaderProgram){
+    setUniformInt(shaderProgram,GL_TEXTURE0,"base_color_tex");
+    setUniformInt(shaderProgram,GL_TEXTURE1,"normal_tex");
+    setUniformInt(shaderProgram,GL_TEXTURE2,"rough_metal_tex");
+    setUniformInt(shaderProgram,GL_TEXTURE3,"lightmap_tex");
 }
