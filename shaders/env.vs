@@ -8,6 +8,7 @@ layout (location = 4) in vec2 aTexcoords1;
 out vec3 normal;
 out vec2 texcoord1;
 out vec2 texcoord2;
+out vec3 world_pos;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -18,5 +19,6 @@ void main()
     texcoord1 = aTexcoords;
     texcoord2 = aTexcoords1;
     normal = aNormal;
+	world_pos = vec3(model * vec4(aPos,1.0f));
     gl_Position = projection * view * model * vec4(aPos,1.0f);
 }
