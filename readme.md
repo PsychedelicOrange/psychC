@@ -2,14 +2,14 @@
 
 ## Summary of features planned
 
-* simple rendering ( pbr (strict), skeletal system, opengl )
+* simple rendering ( pbr, skeletal system, opengl )
 * audio rendering (openal)
 * multiplayer ( client/server, peer to peer)
 * physics system ( bullet )
 
 ## Motivations
 - psychC strives to be a collection of well written (reusable, general, sane) functions required for making a game.
-- funcionns should be as simple as possible, and no simpler.
+- functions should be as simple as possible, and no simpler.
 - there are a lot of functions which do not fit these reqs, they are written temporarily till i figure out a good interface. these will be present in the main file most often.
 - I only know opengl, opengl is the simplest of all, and is sufficient as of now, hence it is picked over vulkan
 - functions should be such that they can be reused to put together a game before a game jam
@@ -20,6 +20,7 @@
 ### Systems
 - [ ] scene format, parsing exporting, blender exporting
 - [ ] Queue system to queue events ( like audio play, or animation play ) and execute on next frame
+- [ ] simple resources pools/maps
 
 ### animations
 - [x] model.play_animation()
@@ -36,23 +37,20 @@
 
 ### audio
 - [x] load wav files and play audio
-- [ ] play_sound("walk.wav", transform) ( Manager )
+- [x] play_sound("walk.wav", transform) ( Manager )
+- [x] mixing multiple audio??
 - [ ] streaming audio from disk
-- [ ] mixing multiple audio??
 
-### pbr
-- [ ] general purpose material system
-- [ ] cloth sheen
-- [ ] focus on authoring a engine specific asset pipeline/format using gltf exporter of blender
-- [ ] texture splatting
-- [ ] decals
-
-### lighting and _**gaphics**_
-- [ ] bake lights for static objects via blender or in engine
-- [ ] shadows ( cascade )
+### shading & _gaaphics_
+- [ ] normal mapping
 - [ ] skybox
-- [ ] hdr
+- [ ] general purpose material system
+- [ ] texture splatting
+- [ ] cloth sheen
+- [ ] decals
 - [ ] global illumination
+- [ ] bake lights for static objects via blender or in engine
+- [ ] shadows ( cascade ) ( for dynamic objects )
 
 ### physics
 - [ ] collision detection and callback
